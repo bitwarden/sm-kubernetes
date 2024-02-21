@@ -1,0 +1,4 @@
+## Append samples of your project ##
+resources:
+- operators_v1_bitwardensecret.yaml
+#+kubebuilder:scaffold:manifestskustomizesamples
