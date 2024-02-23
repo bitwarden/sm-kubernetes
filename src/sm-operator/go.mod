@@ -2,12 +2,15 @@ module github.com/bitwarden/sm-kubernetes
 
 go 1.20
 
+replace github.com/bitwarden/sdk/languages/go => ./bw-sdk
+
 require (
 	github.com/onsi/ginkgo/v2 v2.9.5
 	github.com/onsi/gomega v1.27.7
 	k8s.io/apimachinery v0.27.2
 	k8s.io/client-go v0.27.2
 	sigs.k8s.io/controller-runtime v0.15.0
+	github.com/bitwarden/sdk/languages/go v0.0.0-00010101000000-000000000000
 )
 
 require (

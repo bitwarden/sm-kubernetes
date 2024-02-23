@@ -17,6 +17,11 @@ limitations under the License.
 package v1
 
 import (
+	"encoding/json"
+	"fmt"
+	"time"
+
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -28,39 +33,18 @@ type BitwardenSecretSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	// The base URL for Secrets Manager API.  When in doubt, leave blank
-	// +kubebuilder:Required
-	BitwardenApiUrl string `json:"bitwardenApiUrl,omitempty"`
-	// The base URL for the Bitwarden Identity API.  When in doubt, leave blank
-	// +kubebuilder:Required
-	IdentityApiUrl string `json:"identityApiUrl,omitempty"`
 	// The organization ID for your organization
 	// +kubebuilder:Optional
 	OrganizationId string `json:"organizationId"`
-	// The projects to sync from the organization
-	// +kubebuilder:Required
-	Projects []Project `json:"projects"`
-	// The secret key reference for the authorization token used to connect to Secrets Manager
-	// +kubebuilder:Required
-	AuthToken AuthToken `json:"authToken"`
-}
-
-type Project struct {
-	// The Project ID for your organization
-	// +kubebuilder:Required
-	ProjectId string `json:"projectId"`
 	// The name of the secret for the
 	// +kubebuilder:Required
 	SecretName string `json:"secretName"`
-	// Optional filter to specify that only these IDs are included in the secrets created
+	// The mapping of organization secret IDs to K8s secret keys.  This helps improve readability and mapping to environment variables.
 	// +kubebuilder:Optional
-	IncludedSecretIds []string `json:"includedSecretIds,omitempty"`
-	// Optional filter to specify that these secrets should not be included in the secrets created
-	// +kubebuilder:Optional
-	ExcludedSecretIds []string `json:"excludedSecretIds,omitempty"`
-	// The mapping of project secrets to K8s secret keys
+	SecretMap []SecretMap `json:"map,omitempty"`
+	// The secret key reference for the authorization token used to connect to Secrets Manager
 	// +kubebuilder:Required
-	SecretMap []SecretMap `json:"map"`
+	AuthToken AuthToken `json:"authToken"`
 }
 
 type AuthToken struct {
@@ -79,6 +63,29 @@ type SecretMap struct {
 	// The name of the mapped key in the created Kubernetes secret
 	// +kubebuilder:Required
 	SecretKeyName string `json:"secretKeyName"`
+}
+
+func (bwSecret *BitwardenSecret) SetK8sSecretAnnotations(secret corev1.Secret, secrets map[string][]byte) (corev1.Secret, error) {
+
+	if secret.ObjectMeta.Annotations == nil {
+		secret.ObjectMeta.Annotations = map[string]string{}
+	}
+
+	secret.ObjectMeta.Annotations["k8s.bitwarden.com/sync-time"] = fmt.Sprint(time.Now().UTC())
+
+	if bwSecret.Spec.SecretMap == nil {
+		delete(secret.ObjectMeta.Annotations, "k8s.bitwarden.com/custom-map")
+	} else {
+		bytes, err := json.MarshalIndent(bwSecret.Spec.SecretMap, "", "  ")
+		if err != nil {
+			return secret, err
+		}
+		secret.ObjectMeta.Annotations["k8s.bitwarden.com/custom-map"] = string(bytes)
+	}
+
+	secret.ObjectMeta.Annotations["k8s.bitwarden.com/sync-time"] = fmt.Sprint(time.Now().UTC())
+
+	return secret, nil
 }
 
 // BitwardenSecretStatus defines the observed state of BitwardenSecret

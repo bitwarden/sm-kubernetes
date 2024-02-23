@@ -18,6 +18,8 @@ package controller
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"time"
 
 	"os"
@@ -33,7 +35,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	// "github.com/bitwarden/sdk/languages/go/secrets"
+	sdk "github.com/bitwarden/sdk/languages/go"
 
 	operatorsv1 "github.com/bitwarden/sm-kubernetes/api/v1"
 )
@@ -60,11 +62,11 @@ type BitwardenSecretReconciler struct {
 func (r *BitwardenSecretReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 
-	logger.Info("Rolling!")
+	logger.Info("Syncing " + req.Name)
 
 	bwApiUrl := strings.TrimSpace(os.Getenv("BW_API_URL"))
 	identApiUrl := strings.TrimSpace(os.Getenv("BW_IDENTITY_API_URL"))
-	// orgId := strings.TrimSpace(os.Getenv("BW_SECRETS_MANAGER_ORG_ID"))
+	statePath := strings.TrimSpace(os.Getenv("BW_SECRETS_MANAGER_STATE_PATH"))
 
 	refreshIntervalSeconds := 300
 
@@ -75,11 +77,15 @@ func (r *BitwardenSecretReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	}
 
 	if bwApiUrl == "" {
-		bwApiUrl = "http://api.bitwarden.com"
+		bwApiUrl = "https://api.bitwarden.com"
 	}
 
 	if identApiUrl == "" {
-		identApiUrl = "http://identity.bitwarden.com"
+		identApiUrl = "https://identity.bitwarden.com"
+	}
+
+	if statePath == "" {
+		statePath = "/var/bitwarden/state"
 	}
 
 	ns := req.Namespace
@@ -96,18 +102,6 @@ func (r *BitwardenSecretReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		}, err
 	}
 
-	if strings.TrimSpace(bwsecret.Spec.BitwardenApiUrl) != "" {
-		bwApiUrl = strings.TrimSpace(bwsecret.Spec.BitwardenApiUrl)
-	}
-
-	if strings.TrimSpace(bwsecret.Spec.IdentityApiUrl) != "" {
-		identApiUrl = strings.TrimSpace(bwsecret.Spec.IdentityApiUrl)
-	}
-
-	// if strings.TrimSpace(bwsecret.Spec.OrganizationId) != "" {
-	// 	orgId = strings.TrimSpace(bwsecret.Spec.OrganizationId)
-	// }
-
 	authSecret := &corev1.Secret{}
 	namespacedSecret := types.NamespacedName{
 		Name:      bwsecret.Spec.AuthToken.SecretName,
@@ -120,7 +114,55 @@ func (r *BitwardenSecretReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		}, err
 	}
 
-	// authToken := string(authSecret.Data[bwsecret.Spec.AuthToken.SecretKey])
+	authToken := string(authSecret.Data[bwsecret.Spec.AuthToken.SecretKey])
+	orgId := bwsecret.Spec.OrganizationId
+
+	bitwardenClient, err := sdk.NewBitwardenClient(&bwApiUrl, &identApiUrl)
+	if err != nil {
+		logger.Error(err, "Faled to start client")
+		return ctrl.Result{
+			RequeueAfter: time.Duration(refreshIntervalSeconds) * time.Second,
+		}, err
+	}
+
+	err = bitwardenClient.AccessTokenLogin(authToken, &statePath)
+	if err != nil {
+		logger.Error(err, "Faled to authenticate")
+		return ctrl.Result{
+			RequeueAfter: time.Duration(refreshIntervalSeconds) * time.Second,
+		}, err
+	}
+
+	secrets := map[string][]byte{}
+	secretIds := []string{}
+
+	smSecrets, err := bitwardenClient.Secrets.List(orgId)
+
+	if err != nil {
+		logger.Error(err, "Faled to list secrets")
+		return ctrl.Result{
+			RequeueAfter: time.Duration(refreshIntervalSeconds) * time.Second,
+		}, err
+	}
+
+	for _, smSecret := range smSecrets.Data {
+		secretIds = append(secretIds, smSecret.ID)
+	}
+
+	smSecretVals, err := bitwardenClient.Secrets.GetByIDS(secretIds)
+
+	if err != nil {
+		logger.Error(err, "Faled to get secrets by id")
+		return ctrl.Result{
+			RequeueAfter: time.Duration(refreshIntervalSeconds) * time.Second,
+		}, err
+	}
+
+	for _, smSecretVal := range smSecretVals.Data {
+		secrets[smSecretVal.ID] = []byte(smSecretVal.Value)
+	}
+
+	defer bitwardenClient.Close()
 
 	//Clean-up removed secrets
 	secretList := &corev1.SecretList{}
@@ -131,84 +173,84 @@ func (r *BitwardenSecretReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 
 	r.List(ctx, secretList, ops...)
 
-	for _, k8sSecret := range secretList.Items {
-		found := false
+	secret := &corev1.Secret{}
+	namespacedSecret = types.NamespacedName{
+		Name:      bwsecret.Spec.SecretName,
+		Namespace: ns,
+	}
+	err = r.Get(ctx, namespacedSecret, secret)
+	//Creating new
+	if err != nil && errors.IsNotFound(err) {
+		secret = &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:        bwsecret.Spec.SecretName,
+				Namespace:   ns,
+				Labels:      map[string]string{},
+				Annotations: map[string]string{},
+			},
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "Secret",
+				APIVersion: "v1",
+			},
+			Type: corev1.SecretTypeOpaque,
+			Data: map[string][]byte{},
+		}
+		secret.ObjectMeta.Labels["k8s.bitwarden.com/bw-secret"] = string(bwsecret.UID)
 
-		for _, project := range bwsecret.Spec.Projects {
-			if project.SecretName == k8sSecret.Name {
-				found = true
-				break
-			}
+		if err := ctrl.SetControllerReference(bwsecret, secret, r.Scheme); err != nil {
+			logger.Error(err, "Failed to set controller reference")
+			return ctrl.Result{
+				RequeueAfter: time.Duration(refreshIntervalSeconds) * time.Second,
+			}, err
 		}
 
-		if found {
-			continue
+		err := r.Create(ctx, secret)
+		if err != nil {
+			return ctrl.Result{
+				RequeueAfter: time.Duration(refreshIntervalSeconds) * time.Second,
+			}, err
 		}
 
-		r.Delete(ctx, &k8sSecret)
 	}
 
-	for _, project := range bwsecret.Spec.Projects {
-		secret := &corev1.Secret{}
-		namespacedSecret := types.NamespacedName{
-			Name:      project.SecretName,
-			Namespace: ns,
-		}
-		err := r.Get(ctx, namespacedSecret, secret)
-		//Creating new
-		if err != nil && errors.IsNotFound(err) {
-			newSecret := &corev1.Secret{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      project.SecretName,
-					Namespace: ns,
-					Labels:    map[string]string{},
-				},
-				TypeMeta: metav1.TypeMeta{
-					Kind:       "Secret",
-					APIVersion: "v1",
-				},
-				Type: corev1.SecretTypeOpaque,
-				Data: map[string][]byte{},
-			}
-			newSecret.ObjectMeta.Labels["k8s.bitwarden.com/bw-secret"] = string(bwsecret.UID)
-			for _, mappedSecret := range project.SecretMap {
-				newSecret.Data[mappedSecret.SecretKeyName] = []byte(mappedSecret.BwSecretId)
-			}
-
-			if err := ctrl.SetControllerReference(bwsecret, newSecret, r.Scheme); err != nil {
-				logger.Error(err, "Failed to set controller reference")
-				return ctrl.Result{
-					RequeueAfter: time.Duration(refreshIntervalSeconds) * time.Second,
-				}, err
-			}
-
-			err := r.Create(ctx, newSecret)
-			if err != nil {
-				return ctrl.Result{
-					RequeueAfter: time.Duration(refreshIntervalSeconds) * time.Second,
-				}, err
-			}
-
-		} else {
-			//Update existing
-			secret.ObjectMeta.Labels["k8s.bitwarden.com/bw-secret"] = string(bwsecret.UID)
-
-			for k := range secret.Data {
-				delete(secret.Data, k)
-			}
-
-			for _, mappedSecret := range project.SecretMap {
-				secret.Data[mappedSecret.SecretKeyName] = []byte(mappedSecret.BwSecretId)
-			}
-			err := r.Update(ctx, secret)
-			if err != nil {
-				return ctrl.Result{
-					RequeueAfter: time.Duration(refreshIntervalSeconds) * time.Second,
-				}, err
-			}
-		}
+	for k := range secret.Data {
+		delete(secret.Data, k)
 	}
 
+	for _, mappedSecret := range bwsecret.Spec.SecretMap {
+		secrets[mappedSecret.SecretKeyName] = secrets[mappedSecret.BwSecretId]
+		delete(secrets, mappedSecret.BwSecretId)
+	}
+
+	secret.Data = secrets
+
+	if secret.ObjectMeta.Annotations == nil {
+		secret.ObjectMeta.Annotations = map[string]string{}
+	}
+
+	secret.ObjectMeta.Annotations["k8s.bitwarden.com/sync-time"] = fmt.Sprint(time.Now().UTC())
+
+	if bwsecret.Spec.SecretMap == nil {
+		delete(secret.ObjectMeta.Annotations, "k8s.bitwarden.com/custom-map")
+	} else {
+		bytes, err := json.MarshalIndent(bwsecret.Spec.SecretMap, "", "  ")
+		if err != nil {
+			logger.Error(err, "Error recording map to attribute.")
+		}
+		secret.ObjectMeta.Annotations["k8s.bitwarden.com/custom-map"] = string(bytes)
+	}
+
+	secret.ObjectMeta.Annotations["k8s.bitwarden.com/sync-time"] = fmt.Sprint(time.Now().UTC())
+
+	err = r.Update(ctx, secret)
+	if err != nil {
+		logger.Error(err, "Failed to update "+req.Name)
+		return ctrl.Result{
+			RequeueAfter: time.Duration(refreshIntervalSeconds) * time.Second,
+		}, err
+	}
+
+	logger.Info("Completed sync for " + req.Name)
 	return ctrl.Result{
 		RequeueAfter: time.Duration(refreshIntervalSeconds) * time.Second,
 	}, nil
@@ -218,6 +260,5 @@ func (r *BitwardenSecretReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 func (r *BitwardenSecretReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&operatorsv1.BitwardenSecret{}).
-		Owns(&corev1.Secret{}).
 		Complete(r)
 }
