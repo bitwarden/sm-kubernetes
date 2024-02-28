@@ -65,7 +65,39 @@ type SecretMap struct {
 	SecretKeyName string `json:"secretKeyName"`
 }
 
-func (bwSecret *BitwardenSecret) SetK8sSecretAnnotations(secret corev1.Secret, secrets map[string][]byte) (corev1.Secret, error) {
+func (bwSecret *BitwardenSecret) CreateK8sSecret() *corev1.Secret {
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        bwSecret.Spec.SecretName,
+			Namespace:   bwSecret.Namespace,
+			Labels:      map[string]string{},
+			Annotations: map[string]string{},
+		},
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "Secret",
+			APIVersion: "v1",
+		},
+		Type: corev1.SecretTypeOpaque,
+		Data: map[string][]byte{},
+	}
+	secret.ObjectMeta.Labels["k8s.bitwarden.com/bw-secret"] = string(bwSecret.UID)
+	return secret
+}
+
+func (bwSecret *BitwardenSecret) ApplySecretMap(secret *corev1.Secret) {
+	if secret.Data == nil {
+		secret.Data = map[string][]byte{}
+	}
+
+	if bwSecret.Spec.SecretMap != nil {
+		for _, mappedSecret := range bwSecret.Spec.SecretMap {
+			secret.Data[mappedSecret.SecretKeyName] = secret.Data[mappedSecret.BwSecretId]
+			delete(secret.Data, mappedSecret.BwSecretId)
+		}
+	}
+}
+
+func (bwSecret *BitwardenSecret) SetK8sSecretAnnotations(secret *corev1.Secret) error {
 
 	if secret.ObjectMeta.Annotations == nil {
 		secret.ObjectMeta.Annotations = map[string]string{}
@@ -78,20 +110,26 @@ func (bwSecret *BitwardenSecret) SetK8sSecretAnnotations(secret corev1.Secret, s
 	} else {
 		bytes, err := json.MarshalIndent(bwSecret.Spec.SecretMap, "", "  ")
 		if err != nil {
-			return secret, err
+			return err
 		}
 		secret.ObjectMeta.Annotations["k8s.bitwarden.com/custom-map"] = string(bytes)
 	}
 
-	secret.ObjectMeta.Annotations["k8s.bitwarden.com/sync-time"] = fmt.Sprint(time.Now().UTC())
-
-	return secret, nil
+	return nil
 }
 
 // BitwardenSecretStatus defines the observed state of BitwardenSecret
 type BitwardenSecretStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
+
+	// Conditions store the status conditions of the BitwardenSecret instances
+	// +operator-sdk:csv:customresourcedefinitions:type=status
+	LastSuccessfulSyncTime metav1.Time `json:"lastSuccessfulSyncTime,omitempty"`
+
+	// Conditions store the status conditions of the BitwardenSecret instances
+	// +operator-sdk:csv:customresourcedefinitions:type=status
+	Conditions []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type" protobuf:"bytes,1,rep,name=conditions"`
 }
 
 //+kubebuilder:object:root=true
