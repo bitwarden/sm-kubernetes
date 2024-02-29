@@ -101,7 +101,7 @@ spec:
         env:
         - name: BW_API_URL
           value: https://api.bitwarden.com
-        - name: identApiUrl
+        - name: BW_IDENTITY_API_URL
           value: https://identity.bitwarden.com
         - name: BW_SECRETS_MANAGER_REFRESH_INTERVAL
           value: "300"
