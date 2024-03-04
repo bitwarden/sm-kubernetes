@@ -158,6 +158,13 @@ docker-buildx: test ## Build and push docker image for the manager for cross-pla
 	- $(CONTAINER_TOOL) buildx rm project-v3-builder
 	rm Dockerfile.cross
 
+.PHONY: podman-buildx
+podman-buildx: test ## Build and push docker image for the manager for cross-platform support
+	# copy existing Dockerfile and insert --platform=${BUILDPLATFORM} into Dockerfile.cross, and preserve the original Dockerfile
+	sed -e '1 s/\(^FROM\)/FROM --platform=\$$\{BUILDPLATFORM\}/; t' -e ' 1,// s//FROM --platform=\$$\{BUILDPLATFORM\}/' Dockerfile > Dockerfile.cross
+	- $(CONTAINER_TOOL) build --platform=$(PLATFORMS) --tag ${IMG} -f Dockerfile.cross .
+	rm Dockerfile.cross
+
 ##@ Deployment
 
 ifndef ignore-not-found
