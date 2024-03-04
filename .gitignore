@@ -22,3 +22,5 @@ Thumbs.db
 # Node
 node_modules
 npm-debug.log
+
+src/sm-operator/bin/*
