@@ -1,0 +1,115 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"type": "shell",
+			"label": "build",
+			"command": "make build --directory ${workspaceFolder}",
+			"problemMatcher": [
+				"$go"
+			],
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			},
+			"options": {
+				"cwd": "${workspaceFolder}"
+			}
+		},
+		{
+			"type": "shell",
+			"label": "appy-crd",
+			"command": "make install --directory ${workspaceFolder}",
+			"problemMatcher": [
+				"$go"
+			],
+			"group": {
+				"kind": "none",
+				"isDefault": false
+			},
+			"options": {
+				"cwd": "${workspaceFolder}"
+			}
+		},
+		{
+			"type": "shell",
+			"label": "docker-build",
+			"command": "make docker-build --directory ${workspaceFolder}",
+			"problemMatcher": [],
+			"group": {
+				"kind": "none",
+				"isDefault": false
+			},
+			"options": {
+				"cwd": "${workspaceFolder}"
+			}
+		},
+		{
+			"type": "shell",
+			"label": "build-manifests",
+			"command": "make manifests --directory ${workspaceFolder}",
+			"problemMatcher": [],
+			"group": {
+				"kind": "none",
+				"isDefault": false
+			},
+			"options": {
+				"cwd": "${workspaceFolder}"
+			}
+		},
+		{
+			"type": "shell",
+			"label": "docker-push",
+			"command": "make docker-push --directory ${workspaceFolder}",
+			"problemMatcher": [],
+			"group": {
+				"kind": "none",
+				"isDefault": false
+			},
+			"options": {
+				"cwd": "${workspaceFolder}"
+			},
+			"dependsOn": [ "docker-build" ]
+		},
+		{
+			"type": "shell",
+			"label": "kind-push",
+			"command": "make docker-save --directory ${workspaceFolder} && kind load image-archive ./bin/sm-operator.tar && rm ./bin/sm-operator.tar",
+			"problemMatcher": [],
+			"group": {
+				"kind": "none",
+				"isDefault": false
+			},
+			"options": {
+				"cwd": "${workspaceFolder}"
+			},
+			"dependsOn": [ "docker-build" ]
+		},
+		{
+			"type": "shell",
+			"label": "deploy",
+			"command": "make deploy --directory ${workspaceFolder}",
+			"problemMatcher": [],
+			"group": {
+				"kind": "none",
+				"isDefault": false
+			},
+			"options": {
+				"cwd": "${workspaceFolder}"
+			}
+		},
+		{
+			"type": "shell",
+			"label": "kind-deploy",
+			"command": "make deploy --directory ${workspaceFolder}",
+			"problemMatcher": [],
+			"group": {
+				"kind": "none",
+				"isDefault": false
+			},
+			"options": {
+				"cwd": "${workspaceFolder}"
+			}
+		}
+	]
+}

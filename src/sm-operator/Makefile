@@ -94,6 +94,15 @@ all: build
 help: ## Display this help.
 	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n"} /^[a-zA-Z_0-9-]+:.*?##/ { printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
 
+.PHONY: setup
+setup: ## Setting up the SDK on the development machine
+	echo "coming soon"
+
+.PHONY: docker-setup
+docker-setup: ## Setup SDK for development.  This will change as time goes on.  This is temporary for Dockerfile usage
+	cp /usr/lib/libbitwarden_c.so $(LOCALBIN)
+
+
 ##@ Development
 
 .PHONY: manifests
@@ -138,8 +147,8 @@ docker-push: ## Push docker image with the manager.
 	$(CONTAINER_TOOL) push ${IMG}
 
 .PHONY: docker-save
-docker-save: ## Push docker image with the manager.
-	$(CONTAINER_TOOL) save ${IMG} -o ./sm-operator.tar
+docker-save: ## Save docker image to archive.
+	$(CONTAINER_TOOL) save ${IMG} -o $(LOCALBIN)/sm-operator.tar
 
 # PLATFORMS defines the target platforms for  the manager image be build to provide support to multiple
 # architectures. (i.e. make docker-buildx IMG=myregistry/mypoperator:0.0.1). To use this option you need to:

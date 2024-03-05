@@ -14,6 +14,11 @@ RUN go mod download
 COPY cmd/main.go cmd/main.go
 COPY api/ api/
 COPY internal/controller/ internal/controller/
+
+# Temporary until download location is setup.  Use "make docker-setup" to prepare.
+# SDK binaries will need to be in /usr/lib
+COPY ./bin/libbitwarden_c.so /workspace/bw-sdk/internal/cinterface/lib/
+
 RUN mkdir state
 
 RUN CGO_ENABLED=1 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -a -o manager cmd/main.go
