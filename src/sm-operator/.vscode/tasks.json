@@ -18,7 +18,7 @@
 		},
 		{
 			"type": "shell",
-			"label": "appy-crd",
+			"label": "apply-crd",
 			"command": "make install --directory ${workspaceFolder}",
 			"problemMatcher": [
 				"$go"
