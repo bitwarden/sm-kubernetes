@@ -11,7 +11,11 @@
             "mode": "debug",
             "program": "${workspaceFolder}/cmd/main.go",
             "cwd": "${workspaceFolder}",
-            "preLaunchTask": "build"
+            "preLaunchTask": "build",
+            "env": {
+                "BW_API_URL": "http://bitwarden-self-host-api.bitwarden.svc.cluster.local:5000",
+                "BW_IDENTITY_API_URL": "http://bitwarden-self-host-identity.bitwarden.svc.cluster.local:5000"
+            }
         }
     ]
 }
