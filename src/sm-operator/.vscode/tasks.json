@@ -97,19 +97,6 @@
 			"options": {
 				"cwd": "${workspaceFolder}"
 			}
-		},
-		{
-			"type": "shell",
-			"label": "kind-deploy",
-			"command": "make deploy --directory ${workspaceFolder}",
-			"problemMatcher": [],
-			"group": {
-				"kind": "none",
-				"isDefault": false
-			},
-			"options": {
-				"cwd": "${workspaceFolder}"
-			}
 		}
 	]
 }

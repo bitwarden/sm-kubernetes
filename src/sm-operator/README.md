@@ -53,13 +53,13 @@ make uninstall
 
 1. Build and push your image directly to Kind by using the Visual Studio Code Command Palette.  Open the palette and select Tasks: Run Task and select "kind-push".
 
-1. Deploy the Kubernetes objects to Kind by using the Visual Studio Code Command Palette.  Open the palette and select Tasks: Run Task and select "kind-deploy".
+1. Deploy the Kubernetes objects to Kind by using the Visual Studio Code Command Palette.  Open the palette and select Tasks: Run Task and select "deploy".
 
 1. Create a secret to house the Secrets Manager authentication token in the namespace where you will be creating your BitwardenSecret object: `kubectl create secret generic bw-auth-token -n some-namespace --from-literal=token="<Auth-Token-Here>"`
 
 1. Install an instances of BitwardenSecret.  An example can be found in [config/samples/k8s_v1_bitwardensecret.yaml](config/samples/k8s_v1_bitwardensecret.yaml):  `kubectl apply -f -n some-namespace config/samples/k8s_v1_bitwardensecret.yaml`
 
-### Alternative: Running on a cluster
+### Alternative: Running on a cluster using a registry
 
 1. Build and push your image to the registry location specified by `IMG`: `make docker-build docker-push IMG=<some-registry>/sm-operator:tag`
 

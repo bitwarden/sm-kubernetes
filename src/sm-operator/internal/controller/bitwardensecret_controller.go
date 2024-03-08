@@ -121,7 +121,7 @@ func (r *BitwardenSecretReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	secrets, deletes, err := PullSecretManagerSecretDeltas(logger, bwApiUrl, identApiUrl, statePath, orgId, authToken)
 
 	if err != nil {
-		r.LogError(logger, ctx, bwSecret, err, "Error pulling Secret Manager secrets from API")
+		r.LogError(logger, ctx, bwSecret, err, fmt.Sprintf("Error pulling Secret Manager secrets from API => API: %s -- Identity: %s -- State: %s -- OrgId: %s ", bwApiUrl, identApiUrl, statePath, orgId))
 		return ctrl.Result{
 			RequeueAfter: time.Duration(refreshIntervalSeconds) * time.Second,
 		}, err
