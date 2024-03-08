@@ -69,6 +69,22 @@ make uninstall
 
 1. Install an instances of BitwardenSecret.  An example can be found in [config/samples/k8s_v1_bitwardensecret.yaml](config/samples/k8s_v1_bitwardensecret.yaml):  `kubectl apply -f -n some-namespace config/samples/k8s_v1_bitwardensecret.yaml`
 
+### BitwardenSecret
+
+Think of the BitwardenSecret object as the synchronization settings that will be used by the operator to create and synchronize a Kubernetes secret. This Kubernetes secret will live inside of a namespace and will be injected with the data available to a Secrets Manager service account. The resulting Kubernetes secret will include all secrets that a specific service account has access to. The sample manifest ([config/samples/k8s_v1_bitwardensecret.yaml](config/samples/k8s_v1_bitwardensecret.yaml)) gives the basic structure of the BitwardenSecret.  The key settings that you will want to update are listed below:
+
+* **metadata.name**: The name of the BitwardenSecret object you are deploying
+* **spec.organizationId**: The Bitwarden organization ID you are pulling Secrets Manager data from
+* **spec.secretName**: The name of the Kubernetes secret that will be created and injected with Secrets Manager data.
+* **spec.authToken**: The name of a secret inside of the Kubernetes namespace that the BitwardenSecrets object is being deployed into that contains the Secrets Manager service account authorization token being used to access secrets.
+
+Secrets Manager does not guaranty unique secret names across projects, so by default secrets will be created with the Secrets Manager secret UUID used as the key.  To make your generated secret easier to use, you can create a map of Bitwarden Secret IDs to Kubernetes secret keys.  The generated secret will replace the Bitwarden Secret IDs with the mapped friendly name you provide.  Below are the map settings available:
+
+* **bwSecretId**: This is the UUID of the secret in Secrets Manager.  This can found using the [Bitwarden Secrets Manager CLI](https://github.com/bitwarden/sdk/releases).
+* **secretKeyName**: The resulting key inside the Kubernetes secret that replaces the UUID
+
+Note that the custom mapping is made available on the generated secret for informational purposes in the `k8s.bitwarden.com/custom-map` annotation.
+
 ### Undeploy controller
 
 To "UnDeploy" the controller from the cluster after testing, run:
