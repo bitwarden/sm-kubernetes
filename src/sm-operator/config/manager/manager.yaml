@@ -99,14 +99,10 @@ spec:
             cpu: 10m
             memory: 64Mi
         env:
-        # "BW_API_URL": "http://bitwarden-self-host-api.bitwarden.svc.cluster.local:5000",
-        #         "BW_IDENTITY_API_URL": "http://bitwarden-self-host-identity.bitwarden.svc.cluster.local:5000"
         - name: BW_API_URL
-          # value: https://api.bitwarden.com
-          value: "http://bitwarden-self-host-api.bitwarden.svc.cluster.local:5000"
+          value: https://api.bitwarden.com
         - name: BW_IDENTITY_API_URL
-          # value: https://identity.bitwarden.com
-          value: "http://bitwarden-self-host-identity.bitwarden.svc.cluster.local:5000"
+          value: https://identity.bitwarden.com
         - name: BW_SECRETS_MANAGER_REFRESH_INTERVAL
           value: "300"
       serviceAccountName: controller-manager

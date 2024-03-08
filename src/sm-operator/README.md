@@ -80,7 +80,7 @@ Think of the BitwardenSecret object as the synchronization settings that will be
 
 Secrets Manager does not guaranty unique secret names across projects, so by default secrets will be created with the Secrets Manager secret UUID used as the key.  To make your generated secret easier to use, you can create a map of Bitwarden Secret IDs to Kubernetes secret keys.  The generated secret will replace the Bitwarden Secret IDs with the mapped friendly name you provide.  Below are the map settings available:
 
-* **bwSecretId**: This is the UUID of the secret in Secrets Manager.  This can found using the [Bitwarden Secrets Manager CLI](https://github.com/bitwarden/sdk/releases).
+* **bwSecretId**: This is the UUID of the secret in Secrets Manager.  This can found under the secret name in the Secrets Manager web portal or by using the [Bitwarden Secrets Manager CLI](https://github.com/bitwarden/sdk/releases).
 * **secretKeyName**: The resulting key inside the Kubernetes secret that replaces the UUID
 
 Note that the custom mapping is made available on the generated secret for informational purposes in the `k8s.bitwarden.com/custom-map` annotation.
