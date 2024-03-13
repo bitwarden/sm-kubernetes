@@ -23,9 +23,9 @@ package controller
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"time"
 
-	"encoding/json"
 	"os"
 	"strconv"
 	"strings"
@@ -61,10 +61,6 @@ type BitwardenSecretReconciler struct {
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
-// TODO(user): Modify the Reconcile function to compare the state specified by
-// the BitwardenSecret object against the actual cluster state, and then
-// perform operations to make the cluster state reflect the state specified by
-// the user.
 //
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.15.0/pkg/reconcile
@@ -73,17 +69,16 @@ func (r *BitwardenSecretReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 
 	message := fmt.Sprintf("Syncing  %s/%s", req.Namespace, req.Name)
 
-	logger.Info(message)
-
-	bwApiUrl, identApiUrl, statePath, refreshIntervalSeconds := GetSettings()
+	bwApiUrl, identApiUrl, statePath, refreshIntervalSeconds := GetSettings(logger)
 
 	ns := req.Namespace
 	bwSecret := &operatorsv1.BitwardenSecret{}
 
 	err := r.Get(ctx, req.NamespacedName, bwSecret)
 
-	//Deleted Bitwarden Secret event.
+	// Deleted Bitwarden Secret event.
 	if err != nil && errors.IsNotFound(err) {
+		logger.Info(fmt.Sprintf("%s/%s was deleted.", req.Namespace, req.Name))
 		return ctrl.Result{}, nil
 	} else if err != nil {
 		r.LogError(logger, ctx, bwSecret, err, "Error looking up BitwardenSecret")
@@ -93,19 +88,28 @@ func (r *BitwardenSecretReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		}, err
 	}
 
-	authSecret := &corev1.Secret{}
-	namespacedAuthSecret := types.NamespacedName{
+	lastSync := bwSecret.Status.LastSuccessfulSyncTime
+
+	// Reconcile was queued by last sync time status update on the BitwardenSecret.  We will ignore it.
+	if time.Now().UTC().Before(lastSync.Time.Add(1 * time.Second)) {
+		return ctrl.Result{}, nil
+	}
+
+	logger.Info(message)
+
+	authK8sSecret := &corev1.Secret{}
+	namespacedAuthK8sSecret := types.NamespacedName{
 		Name:      bwSecret.Spec.AuthToken.SecretName,
 		Namespace: ns,
 	}
 
-	secret := &corev1.Secret{}
-	namespacedSecret := types.NamespacedName{
+	k8sSecret := &corev1.Secret{}
+	namespacedK8sSecret := types.NamespacedName{
 		Name:      bwSecret.Spec.SecretName,
 		Namespace: ns,
 	}
 
-	err = r.Client.Get(ctx, namespacedAuthSecret, authSecret)
+	err = r.Client.Get(ctx, namespacedAuthK8sSecret, authK8sSecret)
 
 	if err != nil {
 		r.LogError(logger, ctx, bwSecret, err, "Error pulling authorization token secret")
@@ -114,11 +118,11 @@ func (r *BitwardenSecretReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		}, err
 	}
 
-	authToken := string(authSecret.Data[bwSecret.Spec.AuthToken.SecretKey])
+	authToken := string(authK8sSecret.Data[bwSecret.Spec.AuthToken.SecretKey])
 	orgId := bwSecret.Spec.OrganizationId
 
 	// Delete deltas will be handled in the future
-	secrets, deletes, err := PullSecretManagerSecretDeltas(logger, bwApiUrl, identApiUrl, statePath, orgId, authToken)
+	refresh, secrets, err := PullSecretManagerSecretDeltas(logger, bwApiUrl, identApiUrl, statePath, orgId, authToken, lastSync.Time)
 
 	if err != nil {
 		r.LogError(logger, ctx, bwSecret, err, fmt.Sprintf("Error pulling Secret Manager secrets from API => API: %s -- Identity: %s -- State: %s -- OrgId: %s ", bwApiUrl, identApiUrl, statePath, orgId))
@@ -127,60 +131,54 @@ func (r *BitwardenSecretReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		}, err
 	}
 
-	err = r.Get(ctx, namespacedSecret, secret)
+	if refresh {
+		err = r.Get(ctx, namespacedK8sSecret, k8sSecret)
 
-	//Creating new
-	if err != nil && errors.IsNotFound(err) {
-		secret = bwSecret.CreateK8sSecret()
+		//Creating new
+		if err != nil && errors.IsNotFound(err) {
+			k8sSecret = bwSecret.CreateK8sSecret()
 
-		// Cascading delete
-		if err := ctrl.SetControllerReference(bwSecret, secret, r.Scheme); err != nil {
-			r.LogError(logger, ctx, bwSecret, err, "Failed to set controller reference")
-			return ctrl.Result{
-				RequeueAfter: time.Duration(refreshIntervalSeconds) * time.Second,
-			}, err
+			// Cascading delete
+			if err := ctrl.SetControllerReference(bwSecret, k8sSecret, r.Scheme); err != nil {
+				r.LogError(logger, ctx, bwSecret, err, "Failed to set controller reference")
+				return ctrl.Result{
+					RequeueAfter: time.Duration(refreshIntervalSeconds) * time.Second,
+				}, err
+			}
+
+			err := r.Create(ctx, k8sSecret)
+			if err != nil {
+				r.LogError(logger, ctx, bwSecret, err, "Creation of K8s secret failed.")
+				return ctrl.Result{
+					RequeueAfter: time.Duration(refreshIntervalSeconds) * time.Second,
+				}, err
+			}
+
 		}
 
-		err := r.Create(ctx, secret)
+		UpdateSecretValues(k8sSecret, secrets)
+
+		bwSecret.ApplySecretMap(k8sSecret)
+
+		err = bwSecret.SetK8sSecretAnnotations(k8sSecret)
+
 		if err != nil {
-			r.LogError(logger, ctx, bwSecret, err, "Creation of K8s secret failed.")
+			r.LogError(logger, ctx, bwSecret, err, fmt.Sprintf("Error setting annotations for  %s/%s", req.Namespace, req.Name))
+		}
+
+		err = r.Update(ctx, k8sSecret)
+		if err != nil {
+			r.LogError(logger, ctx, bwSecret, err, fmt.Sprintf("Failed to update  %s/%s", req.Namespace, req.Name))
 			return ctrl.Result{
 				RequeueAfter: time.Duration(refreshIntervalSeconds) * time.Second,
 			}, err
 		}
 
+		r.LogCompletion(logger, ctx, bwSecret, fmt.Sprintf("Completed sync for %s/%s", req.Namespace, req.Name))
+	} else {
+		logger.Info(fmt.Sprintf("No changes to %s/%s.  Skipping sync.", req.Namespace, req.Name))
 	}
 
-	RevertMap(secret)
-
-	//######################################
-	// Temp need until we get delete deltas
-	// Just rebuilding for now
-	for k := range secret.Data {
-		deletes = append(deletes, k)
-	}
-	//######################################
-
-	RemoveDeletedSecrets(secret, deletes)
-
-	UpdateAddSecretValues(secret, secrets)
-
-	bwSecret.ApplySecretMap(secret)
-
-	err = bwSecret.SetK8sSecretAnnotations(secret)
-	if err != nil {
-		r.LogError(logger, ctx, bwSecret, err, fmt.Sprintf("Error setting annotations for  %s/%s", req.Namespace, req.Name))
-	}
-
-	err = r.Update(ctx, secret)
-	if err != nil {
-		r.LogError(logger, ctx, bwSecret, err, fmt.Sprintf("Failed to update  %s/%s", req.Namespace, req.Name))
-		return ctrl.Result{
-			RequeueAfter: time.Duration(refreshIntervalSeconds) * time.Second,
-		}, err
-	}
-
-	r.LogCompletion(logger, ctx, bwSecret, fmt.Sprintf("Completed sync for %s/%s", req.Namespace, req.Name))
 	return ctrl.Result{
 		RequeueAfter: time.Duration(refreshIntervalSeconds) * time.Second,
 	}, nil
@@ -207,7 +205,6 @@ func (r *BitwardenSecretReconciler) LogError(logger logr.Logger, ctx context.Con
 		apimeta.SetStatusCondition(&bwSecret.Status.Conditions, errorCondition)
 		r.Status().Update(ctx, bwSecret)
 	}
-
 }
 
 func (r *BitwardenSecretReconciler) LogCompletion(logger logr.Logger, ctx context.Context, bwSecret *operatorsv1.BitwardenSecret, message string) {
@@ -232,17 +229,17 @@ func (r *BitwardenSecretReconciler) LogCompletion(logger logr.Logger, ctx contex
 // we will have a delta pull method to only pull what has changed
 // First returned value is the Adds/Updates.  The second returned value is the array of removed IDs.  As the delta call doesn't exist, this is
 // included for future use
-func PullSecretManagerSecretDeltas(logger logr.Logger, bwApiUrl string, identApiUrl string, statePath string, orgId string, authToken string) (map[string][]byte, []string, error) {
+func PullSecretManagerSecretDeltas(logger logr.Logger, bwApiUrl string, identApiUrl string, statePath string, orgId string, authToken string, lastSync time.Time) (bool, map[string][]byte, error) {
 	bitwardenClient, err := sdk.NewBitwardenClient(&bwApiUrl, &identApiUrl)
 	if err != nil {
 		logger.Error(err, "Failed to start client")
-		return nil, nil, err
+		return false, nil, err
 	}
 
 	err = bitwardenClient.AccessTokenLogin(authToken, &statePath)
 	if err != nil {
-		logger.Error(err, "Faled to authenticate")
-		return nil, nil, err
+		logger.Error(err, "Failed to authenticate")
+		return false, nil, err
 	}
 
 	secrets := map[string][]byte{}
@@ -252,8 +249,8 @@ func PullSecretManagerSecretDeltas(logger logr.Logger, bwApiUrl string, identApi
 	smSecrets, err := bitwardenClient.Secrets.List(orgId)
 
 	if err != nil {
-		logger.Error(err, "Faled to list secrets")
-		return nil, nil, err
+		logger.Error(err, "Failed to list secrets")
+		return false, nil, err
 	}
 
 	for _, smSecret := range smSecrets.Data {
@@ -264,8 +261,8 @@ func PullSecretManagerSecretDeltas(logger logr.Logger, bwApiUrl string, identApi
 	smSecretVals, err := bitwardenClient.Secrets.GetByIDS(secretIds)
 
 	if err != nil {
-		logger.Error(err, "Faled to get secrets by id")
-		return nil, nil, err
+		logger.Error(err, "Failed to get secrets by id")
+		return false, nil, err
 	}
 
 	for _, smSecretVal := range smSecretVals.Data {
@@ -274,53 +271,60 @@ func PullSecretManagerSecretDeltas(logger logr.Logger, bwApiUrl string, identApi
 
 	defer bitwardenClient.Close()
 
-	return secrets, nil, nil
+	// Once a new deltas endpoint is setup, the first value will be the boolean of whether something has changed.
+	return true, secrets, nil
 }
 
-func RevertMap(secret *corev1.Secret) error {
-	if val, found := secret.ObjectMeta.Annotations["k8s.bitwarden.com/custom-map"]; found {
-		var array []operatorsv1.SecretMap
-		err := json.Unmarshal([]byte(val), &array)
-
-		if err != nil {
-			return err
-		}
-
-		for _, mappedSecret := range array {
-			secret.Data[mappedSecret.BwSecretId] = secret.Data[mappedSecret.SecretKeyName]
-			delete(secret.Data, mappedSecret.SecretKeyName)
-		}
-	}
-
-	return nil
+func UpdateSecretValues(secret *corev1.Secret, secrets map[string][]byte) {
+	secret.Data = secrets
 }
 
-func RemoveDeletedSecrets(secret *corev1.Secret, secretKeys []string) {
-	for _, k := range secretKeys {
-		delete(secret.Data, k)
-	}
-}
-
-func UpdateAddSecretValues(secret *corev1.Secret, secrets map[string][]byte) {
-	if secret.Data == nil {
-		secret.Data = map[string][]byte{}
-	}
-
-	for k, v := range secrets {
-		secret.Data[k] = v
-	}
-}
-
-func GetSettings() (string, string, string, int) {
+func GetSettings(logger logr.Logger) (string, string, string, int) {
 	bwApiUrl := strings.TrimSpace(os.Getenv("BW_API_URL"))
 	identApiUrl := strings.TrimSpace(os.Getenv("BW_IDENTITY_API_URL"))
 	statePath := strings.TrimSpace(os.Getenv("BW_SECRETS_MANAGER_STATE_PATH"))
-
+	refreshIntervalSecondsStr := strings.TrimSpace(os.Getenv("BW_SECRETS_MANAGER_REFRESH_INTERVAL"))
 	refreshIntervalSeconds := 300
 
-	if value, err := strconv.Atoi(strings.TrimSpace(os.Getenv("BW_SECRETS_MANAGER_REFRESH_INTERVAL"))); err == nil {
-		if value >= 180 {
-			refreshIntervalSeconds = value
+	value, err := strconv.Atoi(refreshIntervalSecondsStr)
+
+	if err != nil {
+		logger.Error(err, fmt.Sprintf("Invalid refresh interval supplied: %s.  Defaulting to 300 seconds.", refreshIntervalSecondsStr))
+	} else if value >= 180 {
+		refreshIntervalSeconds = value
+	} else {
+		logger.Info(fmt.Sprintf("Refresh interval value is below the minimum allowed value of 180 seconds. Reverting to the default 300 seconds. Value supplied: %d", value))
+	}
+
+	if bwApiUrl != "" {
+		_, err := url.ParseRequestURI(bwApiUrl)
+
+		if err != nil {
+			logger.Error(err, fmt.Sprintf("Bitwarden API URL is not valid.  Reverting to https://api.bitwarden.com.  Value supplied: %s", bwApiUrl))
+			bwApiUrl = ""
+		}
+
+		u, err := url.Parse(bwApiUrl)
+
+		if err != nil || u.Scheme == "" || u.Host == "" {
+			logger.Error(err, fmt.Sprintf("Bitwarden API URL is not valid.  Reverting to https://api.bitwarden.com.  Value supplied: %s", bwApiUrl))
+			bwApiUrl = ""
+		}
+	}
+
+	if identApiUrl != "" {
+		_, err := url.ParseRequestURI(identApiUrl)
+
+		if err != nil {
+			logger.Error(err, fmt.Sprintf("Bitwarden Identity URL is not valid.  Reverting to https://identity.bitwarden.com.  Value supplied: %s", identApiUrl))
+			identApiUrl = ""
+		}
+
+		u, err := url.ParseRequestURI(identApiUrl)
+
+		if err != nil || u.Scheme == "" || u.Host == "" {
+			logger.Error(err, fmt.Sprintf("Bitwarden Identity URL is not valid.  Reverting to https://identity.bitwarden.com.  Value supplied: %s", identApiUrl))
+			identApiUrl = ""
 		}
 	}
 

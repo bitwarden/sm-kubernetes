@@ -53,10 +53,10 @@ type BitwardenSecretSpec struct {
 }
 
 type AuthToken struct {
-	// The name of the secret where the authorization token is stored
+	// The name of the Kubernetes secret where the authorization token is stored
 	// +kubebuilder:Required
 	SecretName string `json:"secretName"`
-	// The key of the secret where the authorization token is stored
+	// The key of the Kubernetes secret where the authorization token is stored
 	// +kubebuilder:Required
 	SecretKey string `json:"secretKey"`
 }
