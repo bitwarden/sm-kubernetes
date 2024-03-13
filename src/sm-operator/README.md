@@ -78,7 +78,7 @@ Think of the BitwardenSecret object as the synchronization settings that will be
 * **spec.secretName**: The name of the Kubernetes secret that will be created and injected with Secrets Manager data.
 * **spec.authToken**: The name of a secret inside of the Kubernetes namespace that the BitwardenSecrets object is being deployed into that contains the Secrets Manager service account authorization token being used to access secrets.
 
-Secrets Manager does not guaranty unique secret names across projects, so by default secrets will be created with the Secrets Manager secret UUID used as the key.  To make your generated secret easier to use, you can create a map of Bitwarden Secret IDs to Kubernetes secret keys.  The generated secret will replace the Bitwarden Secret IDs with the mapped friendly name you provide.  Below are the map settings available:
+Secrets Manager does not guarantee unique secret names across projects, so by default secrets will be created with the Secrets Manager secret UUID used as the key.  To make your generated secret easier to use, you can create a map of Bitwarden Secret IDs to Kubernetes secret keys.  The generated secret will replace the Bitwarden Secret IDs with the mapped friendly name you provide.  Below are the map settings available:
 
 * **bwSecretId**: This is the UUID of the secret in Secrets Manager.  This can found under the secret name in the Secrets Manager web portal or by using the [Bitwarden Secrets Manager CLI](https://github.com/bitwarden/sdk/releases).
 * **secretKeyName**: The resulting key inside the Kubernetes secret that replaces the UUID

@@ -229,13 +229,13 @@ func (r *BitwardenSecretReconciler) LogCompletion(logger logr.Logger, ctx contex
 }
 
 // This is currently pulling all secrets for a complete refresh.  In the future
-// we will have a delta plull method to only pull what has changed
+// we will have a delta pull method to only pull what has changed
 // First returned value is the Adds/Updates.  The second returned value is the array of removed IDs.  As the delta call doesn't exist, this is
 // included for future use
 func PullSecretManagerSecretDeltas(logger logr.Logger, bwApiUrl string, identApiUrl string, statePath string, orgId string, authToken string) (map[string][]byte, []string, error) {
 	bitwardenClient, err := sdk.NewBitwardenClient(&bwApiUrl, &identApiUrl)
 	if err != nil {
-		logger.Error(err, "Faled to start client")
+		logger.Error(err, "Failed to start client")
 		return nil, nil, err
 	}
 

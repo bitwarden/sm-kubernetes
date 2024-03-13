@@ -25,6 +25,6 @@ To get started developing, please install the following software.  You do not ha
 
 ### Development
 
-Open Visual Studio Code to the [src/sm-operator](src/sm-operator) subfolder.  Opening here will allow all of the Go language extensions, tasks, and launch settings to work correctly. Please note that the Visual Studio Code debugger for Go does not work work correctly if you open your workspace via a symlink anywhere in the path.  For debugging to work, you should open it from the full path of the repository.
+Open Visual Studio Code to the [src/sm-operator](src/sm-operator) subfolder.  Opening here will allow all of the Go language extensions, tasks, and launch settings to work correctly. Please note that the Visual Studio Code debugger for Go does not work correctly if you open your workspace via a symlink anywhere in the path.  For debugging to work, you should open it from the full path of the repository.
 
 The [README](src/sm-operator/README.md) has further details for interacting with and debugging the code.
