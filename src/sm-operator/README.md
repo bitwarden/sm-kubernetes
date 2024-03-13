@@ -106,10 +106,10 @@ specifies another license. Bitwarden Licensed code is found only in the
 /bitwarden_license directory.
 
 GPL v3.0:
-https://github.com/bitwarden/server/blob/main/LICENSE_GPL.txt
+<https://github.com/bitwarden/server/blob/main/LICENSE_GPL.txt>
 
 Bitwarden License v1.0:
-https://github.com/bitwarden/server/blob/main/LICENSE_BITWARDEN.txt
+<https://github.com/bitwarden/server/blob/main/LICENSE_BITWARDEN.txt>
 
 No grant of any rights in the trademarks, service marks, or logos of Bitwarden is
 made (except as may be necessary to comply with the notice requirements as
