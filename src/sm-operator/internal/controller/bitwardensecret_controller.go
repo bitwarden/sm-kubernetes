@@ -286,14 +286,16 @@ func GetSettings(logger logr.Logger) (string, string, string, int) {
 	refreshIntervalSecondsStr := strings.TrimSpace(os.Getenv("BW_SECRETS_MANAGER_REFRESH_INTERVAL"))
 	refreshIntervalSeconds := 300
 
-	value, err := strconv.Atoi(refreshIntervalSecondsStr)
+	if refreshIntervalSecondsStr != "" {
+		value, err := strconv.Atoi(refreshIntervalSecondsStr)
 
-	if err != nil {
-		logger.Error(err, fmt.Sprintf("Invalid refresh interval supplied: %s.  Defaulting to 300 seconds.", refreshIntervalSecondsStr))
-	} else if value >= 180 {
-		refreshIntervalSeconds = value
-	} else {
-		logger.Info(fmt.Sprintf("Refresh interval value is below the minimum allowed value of 180 seconds. Reverting to the default 300 seconds. Value supplied: %d", value))
+		if err != nil {
+			logger.Error(err, fmt.Sprintf("Invalid refresh interval supplied: %s.  Defaulting to 300 seconds.", refreshIntervalSecondsStr))
+		} else if value >= 180 {
+			refreshIntervalSeconds = value
+		} else {
+			logger.Info(fmt.Sprintf("Refresh interval value is below the minimum allowed value of 180 seconds. Reverting to the default 300 seconds. Value supplied: %d", value))
+		}
 	}
 
 	if bwApiUrl != "" {
