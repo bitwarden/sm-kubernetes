@@ -302,15 +302,15 @@ func GetSettings(logger logr.Logger) (string, string, string, int) {
 		_, err := url.ParseRequestURI(bwApiUrl)
 
 		if err != nil {
-			logger.Error(err, fmt.Sprintf("Bitwarden API URL is not valid.  Reverting to https://api.bitwarden.com.  Value supplied: %s", bwApiUrl))
-			bwApiUrl = ""
+			logger.Error(err, fmt.Sprintf("Bitwarden API URL is not valid.  Value supplied: %s", bwApiUrl))
+			panic(err)
 		}
 
 		u, err := url.Parse(bwApiUrl)
 
 		if err != nil || u.Scheme == "" || u.Host == "" {
-			logger.Error(err, fmt.Sprintf("Bitwarden API URL is not valid.  Reverting to https://api.bitwarden.com.  Value supplied: %s", bwApiUrl))
-			bwApiUrl = ""
+			logger.Error(err, fmt.Sprintf("Bitwarden API URL is not valid.  Value supplied: %s", bwApiUrl))
+			panic(err)
 		}
 	}
 
@@ -318,15 +318,15 @@ func GetSettings(logger logr.Logger) (string, string, string, int) {
 		_, err := url.ParseRequestURI(identApiUrl)
 
 		if err != nil {
-			logger.Error(err, fmt.Sprintf("Bitwarden Identity URL is not valid.  Reverting to https://identity.bitwarden.com.  Value supplied: %s", identApiUrl))
-			identApiUrl = ""
+			logger.Error(err, fmt.Sprintf("Bitwarden Identity URL is not valid.  Value supplied: %s", identApiUrl))
+			panic(err)
 		}
 
 		u, err := url.ParseRequestURI(identApiUrl)
 
 		if err != nil || u.Scheme == "" || u.Host == "" {
-			logger.Error(err, fmt.Sprintf("Bitwarden Identity URL is not valid.  Reverting to https://identity.bitwarden.com.  Value supplied: %s", identApiUrl))
-			identApiUrl = ""
+			logger.Error(err, fmt.Sprintf("Bitwarden Identity URL is not valid.  Value supplied: %s", identApiUrl))
+			panic(err)
 		}
 	}
 
