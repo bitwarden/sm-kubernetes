@@ -18,7 +18,7 @@
 		},
 		{
 			"type": "shell",
-			"label": "appy-crd",
+			"label": "apply-crd",
 			"command": "make install --directory ${workspaceFolder}",
 			"problemMatcher": [
 				"$go"
@@ -74,7 +74,7 @@
 		{
 			"type": "shell",
 			"label": "kind-push",
-			"command": "make docker-save --directory ${workspaceFolder} && kind load image-archive ./bin/sm-operator.tar && rm ./bin/sm-operator.tar",
+			"command": "make docker-save --directory ${workspaceFolder} && kind load image-archive ./sm-operator.tar && rm ./sm-operator.tar",
 			"problemMatcher": [],
 			"group": {
 				"kind": "none",
@@ -88,19 +88,6 @@
 		{
 			"type": "shell",
 			"label": "deploy",
-			"command": "make deploy --directory ${workspaceFolder}",
-			"problemMatcher": [],
-			"group": {
-				"kind": "none",
-				"isDefault": false
-			},
-			"options": {
-				"cwd": "${workspaceFolder}"
-			}
-		},
-		{
-			"type": "shell",
-			"label": "kind-deploy",
 			"command": "make deploy --directory ${workspaceFolder}",
 			"problemMatcher": [],
 			"group": {

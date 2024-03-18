@@ -148,7 +148,7 @@ docker-push: ## Push docker image with the manager.
 
 .PHONY: docker-save
 docker-save: ## Save docker image to archive.
-	$(CONTAINER_TOOL) save ${IMG} -o $(LOCALBIN)/sm-operator.tar
+	$(CONTAINER_TOOL) save ${IMG} -o ./sm-operator.tar
 
 # PLATFORMS defines the target platforms for  the manager image be build to provide support to multiple
 # architectures. (i.e. make docker-buildx IMG=myregistry/mypoperator:0.0.1). To use this option you need to:

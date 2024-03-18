@@ -11,7 +11,9 @@
             "mode": "debug",
             "program": "${workspaceFolder}/cmd/main.go",
             "cwd": "${workspaceFolder}",
-            "preLaunchTask": "build"
+            "preLaunchTask": "build",
+            "env": {
+            }
         }
     ]
 }

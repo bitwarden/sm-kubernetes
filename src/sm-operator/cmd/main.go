@@ -1,17 +1,22 @@
 /*
-Copyright 2024 Bitwarden, Inc..
+Source code in this repository is covered by one of two licenses: (i) the
+GNU General Public License (GPL) v3.0 (ii) the Bitwarden License v1.0. The
+default license throughout the repository is GPL v3.0 unless the header
+specifies another license. Bitwarden Licensed code is found only in the
+/bitwarden_license directory.
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
+GPL v3.0:
+https://github.com/bitwarden/server/blob/main/LICENSE_GPL.txt
 
-    http://www.apache.org/licenses/LICENSE-2.0
+Bitwarden License v1.0:
+https://github.com/bitwarden/server/blob/main/LICENSE_BITWARDEN.txt
 
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
+No grant of any rights in the trademarks, service marks, or logos of Bitwarden is
+made (except as may be necessary to comply with the notice requirements as
+applicable), and use of any Bitwarden trademarks must comply with Bitwarden
+Trademark Guidelines
+<https://github.com/bitwarden/server/blob/main/TRADEMARK_GUIDELINES.md>.
+
 */
 
 package main
