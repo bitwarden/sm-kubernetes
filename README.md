@@ -10,6 +10,7 @@ To get started developing, please install the following software.  You do not ha
 
 * [Go](https://go.dev/dl/) version 1.20 or 1.21
 * [Operator-SDK](https://sdk.operatorframework.io/docs/installation/#install-from-github-release)
+* [musl-gcc](https://wiki.musl-libc.org/getting-started.html)
 * [Make](https://www.gnu.org/software/make/)
 * [Visual Studio Code Go Extension](https://marketplace.visualstudio.com/items?itemName=golang.go)
 * [kubectl](https://kubernetes.io/docs/tasks/tools/)
