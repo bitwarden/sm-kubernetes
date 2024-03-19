@@ -15,7 +15,7 @@ To get started developing, please install the following software.  You do not ha
 * [Visual Studio Code Go Extension](https://marketplace.visualstudio.com/items?itemName=golang.go)
 * [kubectl](https://kubernetes.io/docs/tasks/tools/)
 * [Docker](https://www.docker.com/) or [Podman](https://podman.io/) or another container engine
-* [Build Bitwarden SDK libbitwarden_c.so binary](https://github.com/bitwarden/sdk) copied to /usr/lib (NOTE: We will create a Makefile entry to download these automatically in the future)
+* [Download the appropriate libbitwarden_c binary](https://github.com/bitwarden/sdk) for your OS and architecture to [src/sm-operator/bw-sdk/internal/cinterface/lib](src/sm-operator/bw-sdk/internal/cinterface/lib).  This can be done using `make setup`
 * A [Bitwarden Organization with Secrets Manager](https://bitwarden.com/help/sign-up-for-secrets-manager/).  You will need the organization ID GUID for your organization.
 * An [access token](https://bitwarden.com/help/access-tokens/) for a Secrets Manager service account tied to the projects you want to pull.
 
