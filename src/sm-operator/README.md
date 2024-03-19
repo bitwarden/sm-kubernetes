@@ -12,6 +12,8 @@ You will need a Kubernetes cluster to run against. We recommend [KIND](https://s
 
 **Note:** Your controller will automatically use the current context in your kubeconfig file (i.e. whatever cluster `kubectl cluster-info` shows).
 
+This project uses the Secrets Manager golang SDK.  This SDK requires some binaries exist inside the project.  Run `make setup` to download the appropriate binaries into the project.
+
 ### How it works
 
 This project aims to follow the Kubernetes [Operator pattern](https://kubernetes.io/docs/concepts/extend-kubernetes/operator/).
