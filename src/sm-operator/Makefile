@@ -112,7 +112,7 @@ ifeq ($(ARCH),arm64)
 endif
 setup: ## Setting up the SDK binaries.  The URL in use is temporary.
 	mkdir -p bw-sdk/internal/cinterface/lib
-	curl -sSLo temp.zip --url https://github.com/coltonhurst/go-module-test/releases/download/test-release/libbitwarden_c_files-$(ARCH_STRING)-$(OS_STRING)-$(SDKBINARYVERSION).zip && unzip temp.zip -d bw-sdk/internal/cinterface/lib && rm temp.zip
+	curl -sSLo temp.zip --url https://github.com/coltonhurst/go-module-test/releases/download/test-release/libbitwarden_c_files-$(ARCH_STRING)-$(OS_STRING)-$(SDKBINARYVERSION).zip && unzip -o -q temp.zip -d bw-sdk/internal/cinterface/lib && rm temp.zip
 
 ##@ Development
 
@@ -140,11 +140,11 @@ test: manifests generate fmt vet envtest ## Run tests.
 
 .PHONY: build
 build: manifests generate fmt vet ## Build manager binary.
-	CC=musl-gcc go build -ldflags '-linkmode external -extldflags "-static"' -o bin/manager cmd/main.go
+	CC=musl-gcc LD_LIBRARY_PATH=bw-sdk/internal/cinterface/lib go build -ldflags '-linkmode external -extldflags "-static"' -o bin/manager cmd/main.go
 
 .PHONY: run
 run: manifests generate fmt vet ## Run a controller from your host.
-	go run ./cmd/main.go
+	LD_LIBRARY_PATH=bw-sdk/internal/cinterface/lib go run ./cmd/main.go
 
 # If you wish built the manager image targeting other platforms you can use the --platform flag.
 # (i.e. docker build --platform linux/arm64 ). However, you must enable docker buildKit for it.
