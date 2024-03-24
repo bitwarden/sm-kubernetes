@@ -12,7 +12,9 @@
             "program": "${workspaceFolder}/cmd/main.go",
             "cwd": "${workspaceFolder}",
             "preLaunchTask": "build",
+            "envFile": "${workspaceFolder}/.env",
             "env": {
+                "LD_LIBRARY_PATH": "bw-sdk/internal/cinterface/lib"
             }
         }
     ]
