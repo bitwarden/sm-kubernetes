@@ -7,7 +7,7 @@
 //
 
 // Package mock_controller is a generated GoMock package.
-package controller
+package controller_test_mocks
 
 import (
 	reflect "reflect"

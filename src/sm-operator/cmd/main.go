@@ -31,6 +31,7 @@ import (
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
+
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
 	"k8s.io/apimachinery/pkg/runtime"
@@ -62,8 +63,13 @@ func main() {
 	var enableLeaderElection bool
 	var probeAddr string
 
-	bwApiUrl, identApiUrl, statePath, refreshIntervalSeconds := GetSettings()
-	bwClientFactory := controller.NewBitwardenClientFactory(bwApiUrl, identApiUrl)
+	bwApiUrl, identApiUrl, statePath, refreshIntervalSeconds, err := GetSettings()
+
+	if err != nil {
+		panic(err)
+	}
+
+	bwClientFactory := controller.NewBitwardenClientFactory(*bwApiUrl, *identApiUrl)
 
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
@@ -106,8 +112,8 @@ func main() {
 		Client:                 mgr.GetClient(),
 		Scheme:                 mgr.GetScheme(),
 		BitwardenClientFactory: bwClientFactory,
-		StatePath:              statePath,
-		RefreshIntervalSeconds: refreshIntervalSeconds,
+		StatePath:              *statePath,
+		RefreshIntervalSeconds: *refreshIntervalSeconds,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "BitwardenSecret")
 		os.Exit(1)
@@ -130,7 +136,7 @@ func main() {
 	}
 }
 
-func GetSettings() (string, string, string, int) {
+func GetSettings() (*string, *string, *string, *int, error) {
 	bwApiUrl := strings.TrimSpace(os.Getenv("BW_API_URL"))
 	identApiUrl := strings.TrimSpace(os.Getenv("BW_IDENTITY_API_URL"))
 	statePath := strings.TrimSpace(os.Getenv("BW_SECRETS_MANAGER_STATE_PATH"))
@@ -154,14 +160,19 @@ func GetSettings() (string, string, string, int) {
 
 		if err != nil {
 			setupLog.Error(err, fmt.Sprintf("Bitwarden API URL is not valid.  Value supplied: %s", bwApiUrl))
-			panic(err)
+			return nil, nil, nil, nil, err
 		}
 
 		u, err := url.Parse(bwApiUrl)
 
 		if err != nil || u.Scheme == "" || u.Host == "" {
-			setupLog.Error(err, fmt.Sprintf("Bitwarden API URL is not valid.  Value supplied: %s", bwApiUrl))
-			panic(err)
+			message := fmt.Sprintf("Bitwarden API URL is not valid.  Value supplied: %s", bwApiUrl)
+			if err == nil {
+				err = fmt.Errorf(message)
+			}
+
+			setupLog.Error(err, message)
+			return nil, nil, nil, nil, err
 		}
 	}
 
@@ -170,14 +181,19 @@ func GetSettings() (string, string, string, int) {
 
 		if err != nil {
 			setupLog.Error(err, fmt.Sprintf("Bitwarden Identity URL is not valid.  Value supplied: %s", identApiUrl))
-			panic(err)
+			return nil, nil, nil, nil, err
 		}
 
 		u, err := url.ParseRequestURI(identApiUrl)
 
 		if err != nil || u.Scheme == "" || u.Host == "" {
-			setupLog.Error(err, fmt.Sprintf("Bitwarden Identity URL is not valid.  Value supplied: %s", identApiUrl))
-			panic(err)
+			message := fmt.Sprintf("Bitwarden Identity URL is not valid.  Value supplied: %s", identApiUrl)
+			if err == nil {
+				err = fmt.Errorf(message)
+			}
+
+			setupLog.Error(err, message)
+			return nil, nil, nil, nil, err
 		}
 	}
 
@@ -193,5 +209,5 @@ func GetSettings() (string, string, string, int) {
 		statePath = "/var/bitwarden/state"
 	}
 
-	return bwApiUrl, identApiUrl, statePath, refreshIntervalSeconds
+	return &bwApiUrl, &identApiUrl, &statePath, &refreshIntervalSeconds, nil
 }

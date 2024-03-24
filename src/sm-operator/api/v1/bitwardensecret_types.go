@@ -23,7 +23,6 @@ package v1
 
 import (
 	"encoding/json"
-	"fmt"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -96,8 +95,10 @@ func (bwSecret *BitwardenSecret) ApplySecretMap(secret *corev1.Secret) {
 
 	if bwSecret.Spec.SecretMap != nil {
 		for _, mappedSecret := range bwSecret.Spec.SecretMap {
-			secret.Data[mappedSecret.SecretKeyName] = secret.Data[mappedSecret.BwSecretId]
-			delete(secret.Data, mappedSecret.BwSecretId)
+			if value, containsKey := secret.Data[mappedSecret.BwSecretId]; containsKey {
+				secret.Data[mappedSecret.SecretKeyName] = value
+				delete(secret.Data, mappedSecret.BwSecretId)
+			}
 		}
 	}
 }
@@ -108,7 +109,7 @@ func (bwSecret *BitwardenSecret) SetK8sSecretAnnotations(secret *corev1.Secret) 
 		secret.ObjectMeta.Annotations = map[string]string{}
 	}
 
-	secret.ObjectMeta.Annotations["k8s.bitwarden.com/sync-time"] = fmt.Sprint(time.Now().UTC())
+	secret.ObjectMeta.Annotations["k8s.bitwarden.com/sync-time"] = time.Now().UTC().Format(time.RFC3339Nano)
 
 	if bwSecret.Spec.SecretMap == nil {
 		delete(secret.ObjectMeta.Annotations, "k8s.bitwarden.com/custom-map")
