@@ -2,9 +2,9 @@
 name: Build
 
 on:
-  push:
-    paths-ignore:
-      - ".github/workflows/**"
+  # push:
+  #   paths-ignore:
+  #     - ".github/workflows/**"
   workflow_dispatch:
 
 jobs:
