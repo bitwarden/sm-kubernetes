@@ -110,9 +110,12 @@ endif
 ifeq ($(ARCH),arm64)
 	ARCH_STRING=aarch64
 endif
-setup: ## Setting up the SDK binaries.  The URL in use is temporary.
+setup: ## Setting up the SDK binaries and setting up the sample .env file for use.  The URL in use is temporary.
 	mkdir -p bw-sdk/internal/cinterface/lib
 	curl -sSLo temp.zip --url https://github.com/coltonhurst/go-module-test/releases/download/test-release/libbitwarden_c_files-$(ARCH_STRING)-$(OS_STRING)-$(SDKBINARYVERSION).zip && unzip -o -q temp.zip -d bw-sdk/internal/cinterface/lib && rm temp.zip
+ifeq ("$(wildcard .env)","")
+	cp .env.example .env
+endif
 
 ##@ Development
 
@@ -134,7 +137,7 @@ vet: ## Run go vet against code.
 
 .PHONY: test
 test: manifests generate fmt vet envtest ## Run tests.
-	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test ./... -coverprofile cover.out
+	CC=musl-gcc LD_LIBRARY_PATH=bw-sdk/internal/cinterface/lib KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test -ldflags '-linkmode external -extldflags "-static"' ./... -coverprofile cover.out
 
 ##@ Build
 
@@ -144,7 +147,7 @@ build: manifests generate fmt vet ## Build manager binary.
 
 .PHONY: run
 run: manifests generate fmt vet ## Run a controller from your host.
-	LD_LIBRARY_PATH=bw-sdk/internal/cinterface/lib go run ./cmd/main.go
+	CC=musl-gcc LD_LIBRARY_PATH=bw-sdk/internal/cinterface/lib go run -ldflags '-linkmode external -extldflags "-static"' ./cmd/main.go
 
 # If you wish built the manager image targeting other platforms you can use the --platform flag.
 # (i.e. docker build --platform linux/arm64 ). However, you must enable docker buildKit for it.

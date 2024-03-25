@@ -437,7 +437,12 @@ var _ = Describe("Bitwarden Secrets Controller", Ordered, func() {
 		}, timeout, interval).Should(BeTrue())
 
 		bwSecretName := types.NamespacedName{Name: name, Namespace: namespace}
-		Expect(k8sClient.Get(ctx, bwSecretName, &bwSecret)).Should(Succeed())
+
+		Eventually(func() bool {
+			err := k8sClient.Get(ctx, bwSecretName, &bwSecret)
+			return err == nil && len(bwSecret.Status.Conditions) > 0
+		}, timeout, interval).Should(BeTrue())
+
 		year, month, day := time.Now().UTC().Date()
 		hour := time.Now().UTC().Hour()
 		minute := time.Now().UTC().Minute()
