@@ -3,8 +3,8 @@ name: Build GHCR
 
 on:
   push:
-    paths-ignore:
-      - ".github/workflows/**"
+    # paths-ignore:
+      #- ".github/workflows/**"
   workflow_dispatch:
 
 jobs:
@@ -38,6 +38,12 @@ jobs:
           username: ${{github.actor}}
           password: ${{secrets.GITHUB_TOKEN}}
 
+      - name: Test operator
+        id: test
+        run: |
+          make setup -f src/sm-operator/Makefile
+          make test -f src/sm-operator/Makefile
+          
       - name: Generate Docker image tag
         id: tag
         run: |
