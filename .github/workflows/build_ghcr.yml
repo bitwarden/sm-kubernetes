@@ -41,8 +41,9 @@ jobs:
       - name: Test operator
         id: test
         run: |
-          make setup -f src/sm-operator/Makefile
-          make test -f src/sm-operator/Makefile
+          cd src/sm-operator
+          make setup
+          make test
           
       - name: Generate Docker image tag
         id: tag
