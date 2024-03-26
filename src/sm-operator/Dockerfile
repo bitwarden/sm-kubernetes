@@ -18,7 +18,7 @@ COPY Makefile Makefile
 
 RUN apt update && apt install unzip musl-tools -y
 
-RUN GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} make setup
+RUN GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} make binaries
 
 RUN mkdir state
 

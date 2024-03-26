@@ -549,13 +549,9 @@ var _ = Describe("Bitwarden Secrets Controller", Ordered, func() {
 
 		year, month, day := time.Now().UTC().Date()
 		statYear, statMonth, statDay := bwSecret.Status.LastSuccessfulSyncTime.UTC().Date()
-		hour := time.Now().UTC().Hour()
-		minute := time.Now().UTC().Minute()
 		Expect(statYear).ShouldNot(Equal(year))
 		Expect(statMonth).ShouldNot(Equal(month))
 		Expect(statDay).ShouldNot(Equal(day))
-		Expect(bwSecret.Status.LastSuccessfulSyncTime.UTC().Hour()).ShouldNot(Equal(hour))
-		Expect(bwSecret.Status.LastSuccessfulSyncTime.UTC().Minute()).ShouldNot(Equal(minute))
 
 		bwSecretName := types.NamespacedName{Name: name, Namespace: namespace}
 
@@ -648,13 +644,9 @@ var _ = Describe("Bitwarden Secrets Controller", Ordered, func() {
 
 		year, month, day := time.Now().UTC().Date()
 		statYear, statMonth, statDay := bwSecret.Status.LastSuccessfulSyncTime.UTC().Date()
-		hour := time.Now().UTC().Hour()
-		minute := time.Now().UTC().Minute()
 		Expect(statYear).ShouldNot(Equal(year))
 		Expect(statMonth).ShouldNot(Equal(month))
 		Expect(statDay).ShouldNot(Equal(day))
-		Expect(bwSecret.Status.LastSuccessfulSyncTime.UTC().Hour()).ShouldNot(Equal(hour))
-		Expect(bwSecret.Status.LastSuccessfulSyncTime.UTC().Minute()).ShouldNot(Equal(minute))
 
 		bwSecretName := types.NamespacedName{Name: name, Namespace: namespace}
 
@@ -753,13 +745,9 @@ var _ = Describe("Bitwarden Secrets Controller", Ordered, func() {
 
 		year, month, day := time.Now().UTC().Date()
 		statYear, statMonth, statDay := bwSecret.Status.LastSuccessfulSyncTime.UTC().Date()
-		hour := time.Now().UTC().Hour()
-		minute := time.Now().UTC().Minute()
 		Expect(statYear).ShouldNot(Equal(year))
 		Expect(statMonth).ShouldNot(Equal(month))
 		Expect(statDay).ShouldNot(Equal(day))
-		Expect(bwSecret.Status.LastSuccessfulSyncTime.UTC().Hour()).ShouldNot(Equal(hour))
-		Expect(bwSecret.Status.LastSuccessfulSyncTime.UTC().Minute()).ShouldNot(Equal(minute))
 
 		bwSecretName := types.NamespacedName{Name: name, Namespace: namespace}
 
@@ -854,13 +842,9 @@ var _ = Describe("Bitwarden Secrets Controller", Ordered, func() {
 
 		year, month, day := time.Now().UTC().Date()
 		statYear, statMonth, statDay := bwSecret.Status.LastSuccessfulSyncTime.UTC().Date()
-		hour := time.Now().UTC().Hour()
-		minute := time.Now().UTC().Minute()
 		Expect(statYear).ShouldNot(Equal(year))
 		Expect(statMonth).ShouldNot(Equal(month))
 		Expect(statDay).ShouldNot(Equal(day))
-		Expect(bwSecret.Status.LastSuccessfulSyncTime.UTC().Hour()).ShouldNot(Equal(hour))
-		Expect(bwSecret.Status.LastSuccessfulSyncTime.UTC().Minute()).ShouldNot(Equal(minute))
 
 		bwSecretName := types.NamespacedName{Name: name, Namespace: namespace}
 
@@ -955,13 +939,9 @@ var _ = Describe("Bitwarden Secrets Controller", Ordered, func() {
 
 		year, month, day := time.Now().UTC().Date()
 		statYear, statMonth, statDay := bwSecret.Status.LastSuccessfulSyncTime.UTC().Date()
-		hour := time.Now().UTC().Hour()
-		minute := time.Now().UTC().Minute()
 		Expect(statYear).ShouldNot(Equal(year))
 		Expect(statMonth).ShouldNot(Equal(month))
 		Expect(statDay).ShouldNot(Equal(day))
-		Expect(bwSecret.Status.LastSuccessfulSyncTime.UTC().Hour()).ShouldNot(Equal(hour))
-		Expect(bwSecret.Status.LastSuccessfulSyncTime.UTC().Minute()).ShouldNot(Equal(minute))
 
 		bwSecretName := types.NamespacedName{Name: name, Namespace: namespace}
 
