@@ -19,7 +19,7 @@ jobs:
         run: sudo apt update && sudo apt install -y cloc
 
       - name: Print lines of code
-        run: cloc --include-lang C#,SQL,Razor,"Bourne Shell",PowerShell,HTML,CSS,Sass,JavaScript,TypeScript --vcs git
+        run: cloc --include-lang Go,YAML,JSON,make,Dockerfile --vcs git
 
   build-docker:
     name: Build Docker images
@@ -38,6 +38,14 @@ jobs:
 
       - name: Login to PROD ACR
         run: az acr login -n ${_AZ_REGISTRY%.azurecr.io}
+
+      - name: Test operator
+        id: test
+        run: |
+          sudo apt update && sudo apt install musl-tools -y
+          cd src/sm-operator
+          make setup
+          make test
 
       - name: Generate Docker image tag
         id: tag

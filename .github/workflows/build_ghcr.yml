@@ -3,8 +3,8 @@ name: Build GHCR
 
 on:
   push:
-    # paths-ignore:
-      #- ".github/workflows/**"
+    paths-ignore:
+      - ".github/workflows/**"
   workflow_dispatch:
 
 jobs:
@@ -19,7 +19,7 @@ jobs:
         run: sudo apt update && sudo apt install -y cloc
 
       - name: Print lines of code
-        run: cloc --include-lang Go,YAML,JSON --vcs git
+        run: cloc --include-lang Go,YAML,JSON,make,Dockerfile --vcs git
 
   build-docker:
     name: Build Docker images
@@ -45,7 +45,7 @@ jobs:
           cd src/sm-operator
           make setup
           make test
-          
+
       - name: Generate Docker image tag
         id: tag
         run: |
