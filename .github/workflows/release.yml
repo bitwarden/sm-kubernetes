@@ -35,13 +35,11 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
 
-      - name: Check Release Version
+      - name: Get Version
         id: version
-        uses: bitwarden/gh-actions/release-version-check@main
-        with:
-          release-type: ${{ github.event.inputs.release_type }}
-          project-type: dotnet
-          file: src/KeyConnector/KeyConnector.csproj
+        run: |
+          VERSION=$(sed -nE 's/^VERSION\s+\?=\s+([^\s]+)/\1/p' src/sm-operator/Makefile)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Get branch name
         id: branch

@@ -7,6 +7,10 @@ on:
       version_number:
         description: "New Version"
         required: true
+      cut_rc_branch:
+        description: "Cut RC branch?"
+        default: true
+        type: boolean
 
 jobs:
   bump_version:
@@ -19,6 +23,16 @@ jobs:
     steps:
       - name: Checkout Branch
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+
+      - name: Check if RC branch exists
+        if: ${{ inputs.cut_rc_branch == true }}
+        run: |
+          remote_rc_branch_check=$(git ls-remote --heads origin rc | wc -l)
+          if [[ "${remote_rc_branch_check}" -gt 0 ]]; then
+            echo "Remote RC branch exists."
+            echo "Please delete current RC branch before running again."
+            exit 1
+          fi
 
       - name: Login to Azure - CI Subscription
         uses: Azure/login@e15b166166a8746d1a47596803bd8c1b595455cf # v1.6.0
@@ -72,13 +86,14 @@ jobs:
 
       - name: Create Version PR
         if: ${{ steps.version-changed.outputs.changes_to_commit == 'TRUE' }}
+        id: create-pr
         env:
           PR_BRANCH: "version_bump_${{ github.event.inputs.version_number }}"
           GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
           BASE_BRANCH: main
           TITLE: "Bump version to ${{ github.event.inputs.version_number }}"
         run: |
-          gh pr create --title "$TITLE" \
+          PR_URL=$(gh pr create --title "$TITLE" \
             --base "$BASE" \
             --head "$PR_BRANCH" \
             --label "version update" \
@@ -92,4 +107,50 @@ jobs:
               - [X] Other
 
               ## Objective
-              Automated version bump to ${{ github.event.inputs.version_number }}"
+              Automated version bump to ${{ github.event.inputs.version_number }}")
+          echo "pr_number=${PR_URL##*/}" >> $GITHUB_OUTPUT
+
+      - name: Approve PR
+        if: ${{ steps.version-changed.outputs.changes_to_commit == 'TRUE' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ steps.create-pr.outputs.pr_number }}
+        run: gh pr review $PR_NUMBER --approve
+
+      - name: Merge PR
+        if: ${{ steps.version-changed.outputs.changes_to_commit == 'TRUE' }}
+        env:
+          GH_TOKEN: ${{ steps.retrieve-secrets.outputs.github-pat-bitwarden-devops-bot-repo-scope }}
+          PR_NUMBER: ${{ steps.create-pr.outputs.pr_number }}
+        run: gh pr merge $PR_NUMBER --squash --auto --delete-branch
+
+  cut_rc:
+    name: Cut RC branch
+    if: ${{ inputs.cut_rc_branch == true }}
+    needs: bump_version
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout Branch
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+        with:
+          ref: main
+
+      - name: Verify version has been updated
+        env:
+          NEW_VERSION: ${{ github.event.inputs.version_number }}
+        run: |
+          # Wait for version to change.
+          while : ; do
+            echo "Waiting for version to be updated..."
+            git pull --force
+            CURRENT_VERSION=$(sed -nE 's/^VERSION\s+\?=\s+([^\s]+)/\1/p' src/sm-operator/Makefile)
+
+            # If the versions don't match we continue the loop, otherwise we break out of the loop.
+            [[ "$NEW_VERSION" != "$CURRENT_VERSION" ]] || break
+            sleep 10
+          done
+
+      - name: Cut RC branch
+        run: |
+          git switch --quiet --create rc
+          git push --quiet --set-upstream origin rc
