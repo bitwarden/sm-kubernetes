@@ -11,10 +11,10 @@
             "mode": "debug",
             "program": "${workspaceFolder}/cmd/main.go",
             "cwd": "${workspaceFolder}",
-            "preLaunchTask": "build",
+            "buildFlags": ["-ldflags='-linkmode external -extldflags \"-static\"'"],
             "envFile": "${workspaceFolder}/.env",
             "env": {
-                "LD_LIBRARY_PATH": "bw-sdk/internal/cinterface/lib"
+                "CC": "musl-gcc"
             }
         }
     ]
