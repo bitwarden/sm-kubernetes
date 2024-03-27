@@ -8,7 +8,7 @@ import (
 /*
 #cgo LDFLAGS: -lbitwarden_c
 #cgo LDFLAGS: -Wl,-unresolved-symbols=ignore-all
-#cgo linux LDFLAGS: -L/usr/local/lib -L/usr/lib -L ./lib
+#cgo linux LDFLAGS: -Wl,-rpath=./lib/libbitwarden_c.a -L ./lib
 #cgo darwin LDFLAGS: -L/usr/local/lib -L/usr/lib -L ./lib
 #include <stdlib.h>
 typedef void* ClientPtr;
