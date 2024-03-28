@@ -109,7 +109,7 @@ func (r *BitwardenSecretReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		r.LogError(logger, ctx, bwSecret, err, "Error pulling authorization token secret")
 		return ctrl.Result{
 			RequeueAfter: time.Duration(r.RefreshIntervalSeconds) * time.Second,
-		}, err
+		}, nil
 	}
 
 	authToken := string(authK8sSecret.Data[bwSecret.Spec.AuthToken.SecretKey])
@@ -122,7 +122,7 @@ func (r *BitwardenSecretReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		r.LogError(logger, ctx, bwSecret, err, fmt.Sprintf("Error pulling Secret Manager secrets from API => API: %s -- Identity: %s -- State: %s -- OrgId: %s ", r.BitwardenClientFactory.GetApiUrl(), r.BitwardenClientFactory.GetIdentityApiUrl(), r.StatePath, orgId))
 		return ctrl.Result{
 			RequeueAfter: time.Duration(r.RefreshIntervalSeconds) * time.Second,
-		}, err
+		}, nil
 	}
 
 	if refresh {

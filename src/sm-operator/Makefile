@@ -140,17 +140,17 @@ vet: ## Run go vet against code.
 
 .PHONY: test
 test: manifests generate fmt vet envtest ## Run tests.
-	CC=musl-gcc LD_LIBRARY_PATH=bw-sdk/internal/cinterface/lib KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test -ldflags '-linkmode external -extldflags "-static"' ./... -coverprofile cover.out
+	CC=musl-gcc KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test -ldflags '-linkmode external -extldflags "-static"' ./... -coverprofile cover.out
 
 ##@ Build
 
 .PHONY: build
 build: manifests generate fmt vet ## Build manager binary.
-	CC=musl-gcc LD_LIBRARY_PATH=bw-sdk/internal/cinterface/lib go build -ldflags '-linkmode external -extldflags "-static"' -o bin/manager cmd/main.go
+	CC=musl-gcc go build -ldflags '-linkmode external -extldflags "-static"' -o bin/manager cmd/main.go
 
 .PHONY: run
 run: manifests generate fmt vet ## Run a controller from your host.
-	CC=musl-gcc LD_LIBRARY_PATH=bw-sdk/internal/cinterface/lib go run -ldflags '-linkmode external -extldflags "-static"' ./cmd/main.go
+	CC=musl-gcc go run -ldflags '-linkmode external -extldflags "-static"' ./cmd/main.go
 
 # If you wish built the manager image targeting other platforms you can use the --platform flag.
 # (i.e. docker build --platform linux/arm64 ). However, you must enable docker buildKit for it.
