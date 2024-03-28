@@ -93,7 +93,7 @@ jobs:
           BASE_BRANCH: main
           TITLE: "Bump version to ${{ github.event.inputs.version_number }}"
         run: |
-          PR_URL=$(gh pr create --title "$TITLE" \
+          gh pr create --title "$TITLE" \
             --base "$BASE" \
             --head "$PR_BRANCH" \
             --label "version update" \
@@ -107,50 +107,4 @@ jobs:
               - [X] Other
 
               ## Objective
-              Automated version bump to ${{ github.event.inputs.version_number }}")
-          echo "pr_number=${PR_URL##*/}" >> $GITHUB_OUTPUT
-
-      - name: Approve PR
-        if: ${{ steps.version-changed.outputs.changes_to_commit == 'TRUE' }}
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PR_NUMBER: ${{ steps.create-pr.outputs.pr_number }}
-        run: gh pr review $PR_NUMBER --approve
-
-      - name: Merge PR
-        if: ${{ steps.version-changed.outputs.changes_to_commit == 'TRUE' }}
-        env:
-          GH_TOKEN: ${{ steps.retrieve-secrets.outputs.github-pat-bitwarden-devops-bot-repo-scope }}
-          PR_NUMBER: ${{ steps.create-pr.outputs.pr_number }}
-        run: gh pr merge $PR_NUMBER --squash --auto --delete-branch
-
-  cut_rc:
-    name: Cut RC branch
-    if: ${{ inputs.cut_rc_branch == true }}
-    needs: bump_version
-    runs-on: ubuntu-22.04
-    steps:
-      - name: Checkout Branch
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
-        with:
-          ref: main
-
-      - name: Verify version has been updated
-        env:
-          NEW_VERSION: ${{ github.event.inputs.version_number }}
-        run: |
-          # Wait for version to change.
-          while : ; do
-            echo "Waiting for version to be updated..."
-            git pull --force
-            CURRENT_VERSION=$(sed -nE 's/^VERSION\s+\?=\s+([^\s]+)/\1/p' src/sm-operator/Makefile)
-
-            # If the versions don't match we continue the loop, otherwise we break out of the loop.
-            [[ "$NEW_VERSION" != "$CURRENT_VERSION" ]] || break
-            sleep 10
-          done
-
-      - name: Cut RC branch
-        run: |
-          git switch --quiet --create rc
-          git push --quiet --set-upstream origin rc
+              Automated version bump to ${{ github.event.inputs.version_number }}"
