@@ -53,9 +53,9 @@ make uninstall
 
 ### Running on Kind cluster
 
-1. Build and push your image directly to Kind by using the Visual Studio Code Command Palette.  Open the palette and select Tasks: Run Task and select "kind-push".
+1. Build and push your image directly to Kind by using the Visual Studio Code Command Palette.  Open the palette and select Tasks: Run Task and select "docker-build" followed by "kind-push".
 
-1. Deploy the Kubernetes objects to Kind by using the Visual Studio Code Command Palette.  Open the palette and select Tasks: Run Task and select "deploy".
+1. Deploy the Kubernetes objects to Kind by using the Visual Studio Code Command Palette.  Open the palette  (F1) and select Tasks: Run Task and select "deploy".
 
 1. Create a secret to house the Secrets Manager authentication token in the namespace where you will be creating your BitwardenSecret object: `kubectl create secret generic bw-auth-token -n some-namespace --from-literal=token="<Auth-Token-Here>"`
 
@@ -98,8 +98,10 @@ make undeploy
 ### Unit test
 
 Unit tests are current found in the following files:
-- internal/controller/suite_test.go
-- cmd/suite_test.go
+
+* internal/controller/suite_test.go
+
+* cmd/suite_test.go
 
 To run the unit tests, run `make run` from the root directory of this workspace.  To debug the unit tests, click on the file you would like to debug.  In the `Run and Debug` tab in Visual Studio Code, change the lanch configuration from "Debug" to "Test current file", and then press F5.  **NOTE: Using the Visual Studio Code "Testing" tab does not currently work due to VS Code not linking the static binaries correctly.**
 
