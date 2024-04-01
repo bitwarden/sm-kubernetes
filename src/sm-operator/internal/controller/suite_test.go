@@ -104,6 +104,9 @@ var _ = BeforeSuite(func() {
 		ErrorIfCRDPathMissing: true,
 	}
 
+	apiServer := testEnv.ControlPlane.GetAPIServer()
+	apiServer.Configure().Set("advertise-address", "127.0.0.1")
+
 	var err error
 
 	// cfg is defined in this file globally.
