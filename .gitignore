@@ -25,3 +25,7 @@ npm-debug.log
 
 src/sm-operator/bin/*
 src/sm-operator/sm-operator.tar
+src/sm-operator/bw-sdk/internal/cinterface/lib/*
+src/sm-operator/cmd/__debug_bin*
+**/temp.zip
+**/.env

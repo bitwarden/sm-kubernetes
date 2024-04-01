@@ -1,0 +1,64 @@
+---
+name: Build
+
+on:
+  # push:
+  #   paths-ignore:
+  #     - ".github/workflows/**"
+  workflow_dispatch:
+
+jobs:
+  cloc:
+    name: CLOC
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+
+      - name: Install cloc
+        run: sudo apt update && sudo apt install -y cloc
+
+      - name: Print lines of code
+        run: cloc --include-lang C#,SQL,Razor,"Bourne Shell",PowerShell,HTML,CSS,Sass,JavaScript,TypeScript --vcs git
+
+  build-docker:
+    name: Build Docker images
+    runs-on: ubuntu-22.04
+    env:
+      _AZ_REGISTRY: bitwardenprod.azurecr.io
+      _PROJECT_NAME: sm-operator
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+
+      - name: Login to Azure - PROD Subscription
+        uses: Azure/login@e15b166166a8746d1a47596803bd8c1b595455cf # v1.6.0
+        with:
+          creds: ${{ secrets.AZURE_PROD_KV_CREDENTIALS }}
+
+      - name: Login to PROD ACR
+        run: az acr login -n ${_AZ_REGISTRY%.azurecr.io}
+
+      - name: Generate Docker image tag
+        id: tag
+        run: |
+          IMAGE_TAG=$(echo "${GITHUB_REF:11}" | sed "s#/#-#g")  # slash safe branch name
+          if [[ "$IMAGE_TAG" == "main" ]]; then
+            IMAGE_TAG=dev
+          fi
+          echo "image_tag=$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+      - name: Generate image full name
+        id: image-name
+        env:
+          IMAGE_TAG: ${{ steps.tag.outputs.image_tag }}
+        run: echo "name=${_AZ_REGISTRY}/${_PROJECT_NAME}:${IMAGE_TAG}" >> $GITHUB_OUTPUT
+
+      - name: Build Docker image
+        uses: docker/build-push-action@2cdde995de11925a030ce8070c3d77a52ffcf1c0 # v5.3.0
+        with:
+          context: src/sm-operator
+          file: src/sm-operator/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.image-name.outputs.name }}

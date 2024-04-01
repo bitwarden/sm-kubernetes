@@ -5,6 +5,8 @@
 # - use environment variables to overwrite this value (e.g export VERSION=0.0.2)
 VERSION ?= 0.0.1-Beta
 
+SDKBINARYVERSION = 0.1.0
+
 # CHANNELS define the bundle channels used in the bundle.
 # Add a new line here if you would like to change its default config. (E.g CHANNELS = "candidate,fast,stable")
 # To re-generate a bundle for other specific channels without changing the standard setup, you can:
@@ -29,7 +31,7 @@ BUNDLE_METADATA_OPTS ?= $(BUNDLE_CHANNELS) $(BUNDLE_DEFAULT_CHANNEL)
 #
 # For example, running 'make bundle-build bundle-push catalog-build catalog-push' will build and push both
 # bitwarden/sm-operator-bundle:$VERSION and bitwarden/sm-operator-catalog:$VERSION.
-override IMAGE_TAG_BASE ?= localhost/sm-operator
+IMAGE_TAG_BASE ?= localhost/sm-operator
 
 # BUNDLE_IMG defines the image:tag used for the bundle.
 # You can use it as an arg. (E.g make bundle-build BUNDLE_IMG=<some-registry>/<project-name-bundle>:<tag>)
@@ -94,14 +96,29 @@ all: build
 help: ## Display this help.
 	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n"} /^[a-zA-Z_0-9-]+:.*?##/ { printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
 
+.PHONY: binaries
+OS=$(shell go env GOOS)
+ARCH=$(shell go env GOARCH)
+OS_STRING=unknown-linux-gnu
+ARCH_STRING=x86_64
+ifeq ($(OS),windows)
+	OS_STRING=pc-windows-msvc
+endif
+ifeq ($(OS),darwin)
+	OS_STRING=apple-darwin
+endif
+ifeq ($(ARCH),arm64)
+	ARCH_STRING=aarch64
+endif
+binaries: ## Setting up the SDK binaries.  The URL in use is temporary.
+	mkdir -p bw-sdk/internal/cinterface/lib
+	curl -sSLo temp.zip --url https://github.com/coltonhurst/go-module-test/releases/download/test-release/libbitwarden_c_files-$(ARCH_STRING)-$(OS_STRING)-$(SDKBINARYVERSION).zip && unzip -o -q temp.zip -d bw-sdk/internal/cinterface/lib && rm temp.zip
+
 .PHONY: setup
-setup: ## Setting up the SDK on the development machine
-	echo "coming soon"
-
-.PHONY: docker-setup
-docker-setup: ## Setup SDK for development.  This will change as time goes on.  This is temporary for Dockerfile usage
-	cp /usr/lib/libbitwarden_c.so $(LOCALBIN)
-
+setup: binaries ## Setting up the SDK binaries and setting up the sample .env file for use.  The URL in use is temporary.
+ifeq ("$(wildcard .env)","")
+	cp .env.example .env
+endif
 
 ##@ Development
 
@@ -123,17 +140,17 @@ vet: ## Run go vet against code.
 
 .PHONY: test
 test: manifests generate fmt vet envtest ## Run tests.
-	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test ./... -coverprofile cover.out
+	CC=musl-gcc KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test -ldflags '-linkmode external -extldflags "-static"' ./... -coverprofile cover.out
 
 ##@ Build
 
 .PHONY: build
 build: manifests generate fmt vet ## Build manager binary.
-	go build -o bin/manager cmd/main.go
+	CC=musl-gcc go build -ldflags '-linkmode external -extldflags "-static"' -o bin/manager cmd/main.go
 
 .PHONY: run
 run: manifests generate fmt vet ## Run a controller from your host.
-	go run ./cmd/main.go
+	CC=musl-gcc go run -ldflags '-linkmode external -extldflags "-static"' ./cmd/main.go
 
 # If you wish built the manager image targeting other platforms you can use the --platform flag.
 # (i.e. docker build --platform linux/arm64 ). However, you must enable docker buildKit for it.
@@ -156,7 +173,7 @@ docker-save: ## Save docker image to archive.
 # - have enable BuildKit, More info: https://docs.docker.com/develop/develop-images/build_enhancements/
 # - be able to push the image for your registry (i.e. if you do not inform a valid value via IMG=<myregistry/image:<tag>> then the export will fail)
 # To properly provided solutions that supports more than one platform you should use this option.
-PLATFORMS ?= linux/arm64,linux/amd64,linux/s390x,linux/ppc64le
+PLATFORMS ?= linux/arm64,linux/amd64#,linux/s390x,linux/ppc64le
 .PHONY: docker-buildx
 docker-buildx: test ## Build and push docker image for the manager for cross-platform support
 	# copy existing Dockerfile and insert --platform=${BUILDPLATFORM} into Dockerfile.cross, and preserve the original Dockerfile
@@ -232,7 +249,7 @@ $(CONTROLLER_GEN): $(LOCALBIN)
 .PHONY: envtest
 envtest: $(ENVTEST) ## Download envtest-setup locally if necessary.
 $(ENVTEST): $(LOCALBIN)
-	test -s $(LOCALBIN)/setup-envtest || GOBIN=$(LOCALBIN) go install sigs.k8s.io/controller-runtime/tools/setup-envtest@latest
+	test -s $(LOCALBIN)/setup-envtest || GOBIN=$(LOCALBIN) go install sigs.k8s.io/controller-runtime/tools/setup-envtest@v0.0.0-20240208111015-5923139bc5bd
 
 .PHONY: operator-sdk
 OPERATOR_SDK ?= $(LOCALBIN)/operator-sdk

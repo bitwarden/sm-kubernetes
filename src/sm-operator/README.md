@@ -12,6 +12,8 @@ You will need a Kubernetes cluster to run against. We recommend [KIND](https://s
 
 **Note:** Your controller will automatically use the current context in your kubeconfig file (i.e. whatever cluster `kubectl cluster-info` shows).
 
+This project uses the Secrets Manager golang SDK.  This SDK requires some binaries exist inside the project.  Run `make setup` to download the appropriate binaries into the project.
+
 ### How it works
 
 This project aims to follow the Kubernetes [Operator pattern](https://kubernetes.io/docs/concepts/extend-kubernetes/operator/).
@@ -92,6 +94,14 @@ To "UnDeploy" the controller from the cluster after testing, run:
 ```sh
 make undeploy
 ```
+
+### Unit test
+
+Unit tests are currently found in the following files:
+- internal/controller/suite_test.go
+- cmd/suite_test.go
+
+To run the unit tests, run `make test` from the root directory of this workspace.  To debug the unit tests, click on the file you would like to debug.  In the `Run and Debug` tab in Visual Studio Code, change the lanch configuration from "Debug" to "Test current file", and then press F5.  **NOTE: Using the Visual Studio Code "Testing" tab does not currently work due to VS Code not linking the static binaries correctly.**
 
 ## Contributing
 
