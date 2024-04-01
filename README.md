@@ -8,6 +8,14 @@ To get started developing, please install the following software.  You do not ha
 
 ### Pre-requisites
 
+A Visual Studio Code Dev Container is provided for development purposes, and handles the setup of all of these pre-requisites.  It is strongly recommended that you use the Dev Container, especially on Mac and Windows.  The only requirements for the Dev Container are:
+
+* [Visual Studio Code](https://code.visualstudio.com/)
+* [Docker](https://www.docker.com/) - Podman is not currently supported with our Dev Container
+* [Visual Studio Code Dev Containers Extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers)
+
+For manual Linux setups:
+
 * [Go](https://go.dev/dl/) version 1.20 or 1.21
 * [Operator-SDK](https://sdk.operatorframework.io/docs/installation/#install-from-github-release)
 * [musl-gcc](https://wiki.musl-libc.org/getting-started.html)
@@ -18,10 +26,10 @@ To get started developing, please install the following software.  You do not ha
 * [Download the appropriate libbitwarden_c binary](https://github.com/bitwarden/sdk) for your OS and architecture to [src/sm-operator/bw-sdk/internal/cinterface/lib](src/sm-operator/bw-sdk/internal/cinterface/lib).  This can be done using `make setup`
 * A [Bitwarden Organization with Secrets Manager](https://bitwarden.com/help/sign-up-for-secrets-manager/).  You will need the organization ID GUID for your organization.
 * An [access token](https://bitwarden.com/help/access-tokens/) for a Secrets Manager service account tied to the projects you want to pull.
+* A [Kind Cluster](https://kind.sigs.k8s.io/docs/user/quick-start/) or other local Kubernetes environment with Kubectl pointed to it as the current context for local development.
 
 ### Recommended
 
-* A [Kind Cluster](https://kind.sigs.k8s.io/docs/user/quick-start/) with Kubectl pointed to it as the current context for local development.
 * [Bitwarden Secrets Manager CLI](https://github.com/bitwarden/sdk/releases)
 
 ### Development
