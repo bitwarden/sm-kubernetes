@@ -103,7 +103,7 @@ Unit tests are current found in the following files:
 
 * cmd/suite_test.go
 
-To run the unit tests, run `make run` from the root directory of this workspace.  To debug the unit tests, click on the file you would like to debug.  In the `Run and Debug` tab in Visual Studio Code, change the lanch configuration from "Debug" to "Test current file", and then press F5.  **NOTE: Using the Visual Studio Code "Testing" tab does not currently work due to VS Code not linking the static binaries correctly.**
+To run the unit tests, run `make test` from the root directory of this workspace.  To debug the unit tests, click on the file you would like to debug.  In the `Run and Debug` tab in Visual Studio Code, change the lanch configuration from "Debug" to "Test current file", and then press F5.  **NOTE: Using the Visual Studio Code "Testing" tab does not currently work due to VS Code not linking the static binaries correctly.**
 
 ## Contributing
 

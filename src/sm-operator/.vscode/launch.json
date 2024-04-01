@@ -26,8 +26,7 @@
             "cwd": "${relativeFileDirname}",
             "buildFlags": ["-ldflags='-linkmode external -extldflags \"-static\"'"],
             "env": {
-                "CC": "musl-gcc",
-                "KUBEBUILDER_ASSETS": "${workspaceFolder}/bin/k8s/1.27.1-linux-amd64"
+                "CC": "musl-gcc"
             }
         }
     ]

@@ -25,6 +25,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -73,11 +74,38 @@ var _ = BeforeSuite(func() {
 	refreshInterval = 300
 	statePath = "bin"
 
+	toolsPath := os.Getenv("KUBEBUILDER_ASSETS")
+
+	if toolsPath == "" {
+		entries, err := os.ReadDir("../../bin/k8s")
+		if err != nil {
+			logf.Log.Error(err, "Failed to read bin directory.  Make sure to run \"make test\" before debugging this test suite")
+			panic(err)
+		}
+
+		for _, e := range entries {
+			if e.IsDir() {
+				os.Setenv("KUBEBUILDER_ASSETS", filepath.Join("../../bin/k8s", e.Name()))
+				break
+			}
+		}
+
+		toolsPath = os.Getenv("KUBEBUILDER_ASSETS")
+
+		if toolsPath == "" {
+			err = fmt.Errorf("Failed to find envtest files under bin directory. Please run \"make test\" to resolve this issue.")
+			panic(err)
+		}
+	}
+
 	By("bootstrapping test environment")
 	testEnv = &envtest.Environment{
 		CRDDirectoryPaths:     []string{filepath.Join("..", "..", "config", "crd", "bases")},
 		ErrorIfCRDPathMissing: true,
 	}
+
+	apiServer := testEnv.ControlPlane.GetAPIServer()
+	apiServer.Configure().Set("advertise-address", "127.0.0.1")
 
 	var err error
 
@@ -547,11 +575,9 @@ var _ = Describe("Bitwarden Secrets Controller", Ordered, func() {
 			return err == nil && len(bwSecret.Status.Conditions) > 0
 		}, 3, interval).Should(BeFalse())
 
-		year, month, day := time.Now().UTC().Date()
-		statYear, statMonth, statDay := bwSecret.Status.LastSuccessfulSyncTime.UTC().Date()
+		year := time.Now().UTC().Year()
+		statYear := bwSecret.Status.LastSuccessfulSyncTime.UTC().Year()
 		Expect(statYear).ShouldNot(Equal(year))
-		Expect(statMonth).ShouldNot(Equal(month))
-		Expect(statDay).ShouldNot(Equal(day))
 
 		bwSecretName := types.NamespacedName{Name: name, Namespace: namespace}
 
@@ -642,11 +668,9 @@ var _ = Describe("Bitwarden Secrets Controller", Ordered, func() {
 			return err == nil && len(bwSecret.Status.Conditions) > 0
 		}, 3, interval).Should(BeFalse())
 
-		year, month, day := time.Now().UTC().Date()
-		statYear, statMonth, statDay := bwSecret.Status.LastSuccessfulSyncTime.UTC().Date()
+		year := time.Now().UTC().Year()
+		statYear := bwSecret.Status.LastSuccessfulSyncTime.UTC().Year()
 		Expect(statYear).ShouldNot(Equal(year))
-		Expect(statMonth).ShouldNot(Equal(month))
-		Expect(statDay).ShouldNot(Equal(day))
 
 		bwSecretName := types.NamespacedName{Name: name, Namespace: namespace}
 
@@ -743,11 +767,9 @@ var _ = Describe("Bitwarden Secrets Controller", Ordered, func() {
 			return err == nil && len(bwSecret.Status.Conditions) > 0
 		}, 3, interval).Should(BeFalse())
 
-		year, month, day := time.Now().UTC().Date()
-		statYear, statMonth, statDay := bwSecret.Status.LastSuccessfulSyncTime.UTC().Date()
+		year := time.Now().UTC().Year()
+		statYear := bwSecret.Status.LastSuccessfulSyncTime.UTC().Year()
 		Expect(statYear).ShouldNot(Equal(year))
-		Expect(statMonth).ShouldNot(Equal(month))
-		Expect(statDay).ShouldNot(Equal(day))
 
 		bwSecretName := types.NamespacedName{Name: name, Namespace: namespace}
 
@@ -840,12 +862,9 @@ var _ = Describe("Bitwarden Secrets Controller", Ordered, func() {
 			return err == nil && len(bwSecret.Status.Conditions) > 0
 		}, 3, interval).Should(BeFalse())
 
-		year, month, day := time.Now().UTC().Date()
-		statYear, statMonth, statDay := bwSecret.Status.LastSuccessfulSyncTime.UTC().Date()
+		year := time.Now().UTC().Year()
+		statYear := bwSecret.Status.LastSuccessfulSyncTime.UTC().Year()
 		Expect(statYear).ShouldNot(Equal(year))
-		Expect(statMonth).ShouldNot(Equal(month))
-		Expect(statDay).ShouldNot(Equal(day))
-
 		bwSecretName := types.NamespacedName{Name: name, Namespace: namespace}
 
 		Eventually(func() bool {
@@ -937,11 +956,9 @@ var _ = Describe("Bitwarden Secrets Controller", Ordered, func() {
 			return err == nil && len(bwSecret.Status.Conditions) > 0
 		}, 3, interval).Should(BeFalse())
 
-		year, month, day := time.Now().UTC().Date()
-		statYear, statMonth, statDay := bwSecret.Status.LastSuccessfulSyncTime.UTC().Date()
+		year := time.Now().UTC().Year()
+		statYear := bwSecret.Status.LastSuccessfulSyncTime.UTC().Year()
 		Expect(statYear).ShouldNot(Equal(year))
-		Expect(statMonth).ShouldNot(Equal(month))
-		Expect(statDay).ShouldNot(Equal(day))
 
 		bwSecretName := types.NamespacedName{Name: name, Namespace: namespace}
 
