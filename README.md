@@ -14,6 +14,8 @@ A Visual Studio Code Dev Container is provided for development purposes, and han
 * [Docker](https://www.docker.com/) - Podman is not currently supported with our Dev Container
 * [Visual Studio Code Dev Containers Extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers)
 
+You will need to open a Visual Studio Code instance at the [src/sm-operator](src/sm-operator) subfolder level to use the Dev Container.
+
 For manual Linux setups:
 
 * [Go](https://go.dev/dl/) version 1.20 or 1.21
