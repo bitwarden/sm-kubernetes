@@ -8,19 +8,6 @@ on:
   workflow_dispatch:
 
 jobs:
-  cloc:
-    name: CLOC
-    runs-on: ubuntu-22.04
-    steps:
-      - name: Checkout repo
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
-
-      - name: Install cloc
-        run: sudo apt update && sudo apt install -y cloc
-
-      - name: Print lines of code
-        run: cloc --include-lang Go,YAML,JSON,make,Dockerfile --vcs git
-
   build-docker:
     name: Build Docker images
     runs-on: ubuntu-22.04
@@ -31,7 +18,7 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
 
-      - name: 'Login to GitHub Container Registry'
+      - name: Login to GitHub Container Registry
         uses: docker/login-action@e92390c5fb421da1463c202d546fed0ec5c39f20 #v3.1.0
         with:
           registry: ghcr.io
