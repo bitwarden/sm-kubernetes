@@ -12,7 +12,7 @@ You will need a Kubernetes cluster to run against. We recommend [KIND](https://s
 
 **Note:** Your controller will automatically use the current context in your kubeconfig file (i.e. whatever cluster `kubectl cluster-info` shows).
 
-This project uses the Secrets Manager golang SDK.  This SDK requires some binaries exist inside the project.  Run `make setup` to download the appropriate binaries into the project.
+This project uses the Secrets Manager golang SDK.  This SDK requires some binaries exist inside the project.  Run `make setup` to download the appropriate binaries into the project.  If you are using the Dev Container, this step has already been completed for you.
 
 ### How it works
 
@@ -23,7 +23,7 @@ which provide a reconcile function responsible for synchronizing resources until
 
 The [config](config/) directory contains the generated manifest definitions for deployment and testing of the operator into kubernetes.
 
-#### Modifying the API definitions
+## Modifying the API definitions
 
 If you are editing the API definitions via [api/v1/bitwardensecret_types.go](api/v1/bitwardensecret_types.go), re-generate the manifests such as the custom resource definition using:
 
@@ -35,7 +35,7 @@ make manifests
 
 More information can be found via the [Kubebuilder Documentation](https://book.kubebuilder.io/introduction.html)
 
-### Debugging
+## Debugging
 
 1. Install the Custom Resource Definition into the cluster using `make install` or by using the Visual Studio Task called "apply-crd" from the "Tasks: Run Task" in the command palette.
 
@@ -43,37 +43,19 @@ More information can be found via the [Kubebuilder Documentation](https://book.k
 
 **NOTE:** You can also run this in one step by running: `make install run`
 
-### Uninstall Custom Resource Definition
+### Configuration settings
 
-To delete the CRDs from the cluster:
+A `.env` file will be created underthis workspace's root directory once the Dev Container is created or `make setup` has been run. The following environment variable settings can
+be updated to change the behavior of the operator:
 
-```sh
-make uninstall
-```
-
-### Running on Kind cluster
-
-1. Build and push your image directly to Kind by using the Visual Studio Code Command Palette.  Open the palette and select Tasks: Run Task and select "kind-push".
-
-1. Deploy the Kubernetes objects to Kind by using the Visual Studio Code Command Palette.  Open the palette and select Tasks: Run Task and select "deploy".
-
-1. Create a secret to house the Secrets Manager authentication token in the namespace where you will be creating your BitwardenSecret object: `kubectl create secret generic bw-auth-token -n some-namespace --from-literal=token="<Auth-Token-Here>"`
-
-1. Install an instances of BitwardenSecret.  An example can be found in [config/samples/k8s_v1_bitwardensecret.yaml](config/samples/k8s_v1_bitwardensecret.yaml):  `kubectl apply -f -n some-namespace config/samples/k8s_v1_bitwardensecret.yaml`
-
-### Alternative: Running on a cluster using a registry
-
-1. Build and push your image to the registry location specified by `IMG`: `make docker-build docker-push IMG=<some-registry>/sm-operator:tag`
-
-1. Deploy the controller to the cluster with the image specified by `IMG`: `make deploy IMG=<some-registry>/sm-operator:tag`
-
-1. Create a secret to house the Secrets Manager authentication token in the namespace where you will be creating your BitwardenSecret object: `kubectl create secret generic bw-auth-token -n some-namespace --from-literal=token="<Auth-Token-Here>"`
-
-1. Install an instances of BitwardenSecret.  An example can be found in [config/samples/k8s_v1_bitwardensecret.yaml](config/samples/k8s_v1_bitwardensecret.yaml):  `kubectl apply -f -n some-namespace config/samples/k8s_v1_bitwardensecret.yaml`
+* **BW_API_URL** - Sets the Bitwarden API URL that the Secrets Manager SDK uses. This is useful for self-host scenarios, as well as hitting European servers
+* **BW_IDENTITY_API_URL** - Sets the Bitwarden Identity service URL that the Secrets Manager SDK uses. This is useful for self-host scenarios, as well as hitting European servers
+* **BW_SECRETS_MANAGER_STATE_PATH** - Sets the base path where Secrets Manager SDK stores its state files
+* **BW_SECRETS_MANAGER_REFRESH_INTERVAL** - Specifies the refresh interval in seconds for syncing secrets between Secrets Manager and K8s secrets. The minimum value is 180.
 
 ### BitwardenSecret
 
-Think of the BitwardenSecret object as the synchronization settings that will be used by the operator to create and synchronize a Kubernetes secret. This Kubernetes secret will live inside of a namespace and will be injected with the data available to a Secrets Manager service account. The resulting Kubernetes secret will include all secrets that a specific service account has access to. The sample manifest ([config/samples/k8s_v1_bitwardensecret.yaml](config/samples/k8s_v1_bitwardensecret.yaml)) gives the basic structure of the BitwardenSecret.  The key settings that you will want to update are listed below:
+Our operator is designed to look for the creation of a custom resource called a BitwardenSecret.  Think of the BitwardenSecret object as the synchronization settings that will be used by the operator to create and synchronize a Kubernetes secret. This Kubernetes secret will live inside of a namespace and will be injected with the data available to a Secrets Manager service account. The resulting Kubernetes secret will include all secrets that a specific service account has access to. The sample manifest ([config/samples/k8s_v1_bitwardensecret.yaml](config/samples/k8s_v1_bitwardensecret.yaml)) gives the basic structure of the BitwardenSecret.  The key settings that you will want to update are listed below:
 
 * **metadata.name**: The name of the BitwardenSecret object you are deploying
 * **spec.organizationId**: The Bitwarden organization ID you are pulling Secrets Manager data from
@@ -87,6 +69,52 @@ Secrets Manager does not guarantee unique secret names across projects, so by de
 
 Note that the custom mapping is made available on the generated secret for informational purposes in the `k8s.bitwarden.com/custom-map` annotation.
 
+#### Creating a BitwardenSecret object
+
+To test the operator, we will create a BitwardenSecret object.  But first, we will need to create a secret to house the Secrets Manager authentication token in the namespace where you will be creating your BitwardenSecret object:
+
+```shell
+kubectl create secret generic bw-auth-token -n some-namespace --from-literal=token="<Auth-Token-Here>"
+```
+
+Next, create an instances of BitwardenSecret.  An example can be found in [config/samples/k8s_v1_bitwardensecret.yaml](config/samples/k8s_v1_bitwardensecret.yaml):
+
+```shell
+kubectl apply -f -n some-namespace config/samples/k8s_v1_bitwardensecret.yaml
+```
+
+### Uninstall Custom Resource Definition
+
+To delete the CRDs from the cluster:
+
+```sh
+make uninstall
+```
+
+## Testing the container
+
+The following sections describe how to test the container image itself.  Up to this point the operator has been tested outside of the cluster.  These next steps will allow us to test the operator running inside of the cluster. Custom configuration of URLs, refresh interval, and state path is handled by updating the environment variables in [config/manager/manager.yaml](config/manager/manager.yaml) when working with the container.
+
+### Running on Kind cluster
+
+1. Build and push your image directly to Kind by using the Visual Studio Code Command Palette.  Open the palette and select Tasks: Run Task and select "docker-build" followed by "kind-push".
+
+1. Deploy the Kubernetes objects to Kind by using the Visual Studio Code Command Palette.  Open the palette  (F1) and select Tasks: Run Task and select "deploy".
+
+1. Create a secret to house the Secrets Manager authentication token in the namespace where you will be creating your BitwardenSecret object: `kubectl create secret generic bw-auth-token -n some-namespace --from-literal=token="<Auth-Token-Here>"`
+
+1. Create an instances of BitwardenSecret.  An example can be found in [config/samples/k8s_v1_bitwardensecret.yaml](config/samples/k8s_v1_bitwardensecret.yaml):  `kubectl apply -f -n some-namespace config/samples/k8s_v1_bitwardensecret.yaml`
+
+### Alternative: Running on a cluster using a registry
+
+1. Build and push your image to the registry location specified by `IMG`: `make docker-build docker-push IMG=<some-registry>/sm-operator:tag`
+
+1. Deploy the controller to the cluster with the image specified by `IMG`: `make deploy IMG=<some-registry>/sm-operator:tag`
+
+1. Create a secret to house the Secrets Manager authentication token in the namespace where you will be creating your BitwardenSecret object: `kubectl create secret generic bw-auth-token -n some-namespace --from-literal=token="<Auth-Token-Here>"`
+
+1. Create an instances of BitwardenSecret.  An example can be found in [config/samples/k8s_v1_bitwardensecret.yaml](config/samples/k8s_v1_bitwardensecret.yaml):  `kubectl apply -f -n some-namespace config/samples/k8s_v1_bitwardensecret.yaml`
+
 ### Undeploy controller
 
 To "UnDeploy" the controller from the cluster after testing, run:
@@ -97,9 +125,11 @@ make undeploy
 
 ### Unit test
 
-Unit tests are currently found in the following files:
-- internal/controller/suite_test.go
-- cmd/suite_test.go
+Unit tests are current found in the following files:
+
+* internal/controller/suite_test.go
+
+* cmd/suite_test.go
 
 To run the unit tests, run `make test` from the root directory of this workspace.  To debug the unit tests, click on the file you would like to debug.  In the `Run and Debug` tab in Visual Studio Code, change the lanch configuration from "Debug" to "Test current file", and then press F5.  **NOTE: Using the Visual Studio Code "Testing" tab does not currently work due to VS Code not linking the static binaries correctly.**
 
