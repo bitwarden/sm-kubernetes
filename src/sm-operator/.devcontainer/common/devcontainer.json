@@ -29,11 +29,5 @@
   "mounts": [
     "source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind"
   ],
-  "remoteEnv": {
-      "BWS_ACCESS_TOKEN": "${localEnv:BWS_ACCESS_TOKEN}",
-      "BW_API_URL": "${localEnv:BW_API_URL}",
-      "BW_IDENTITY_API_URL": "${localEnv:BW_IDENTITY_API_URL}",
-      "BW_SECRETS_MANAGER_REFRESH_INTERVAL": "${localEnv:BW_SECRETS_MANAGER_REFRESH_INTERVAL}",
-  },
   "remoteUser": "root" // needed for kind: https://github.com/kubernetes-sigs/kind/issues/3196#issuecomment-1537260166
 }
