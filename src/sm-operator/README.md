@@ -80,7 +80,7 @@ kubectl create secret generic bw-auth-token -n some-namespace --from-literal=tok
 Next, create an instances of BitwardenSecret.  An example can be found in [config/samples/k8s_v1_bitwardensecret.yaml](config/samples/k8s_v1_bitwardensecret.yaml):
 
 ```shell
-kubectl apply -f -n some-namespace config/samples/k8s_v1_bitwardensecret.yaml
+kubectl apply -n some-namespace -f config/samples/k8s_v1_bitwardensecret.yaml
 ```
 
 ### Uninstall Custom Resource Definition
@@ -103,7 +103,7 @@ The following sections describe how to test the container image itself.  Up to t
 
 1. Create a secret to house the Secrets Manager authentication token in the namespace where you will be creating your BitwardenSecret object: `kubectl create secret generic bw-auth-token -n some-namespace --from-literal=token="<Auth-Token-Here>"`
 
-1. Create an instances of BitwardenSecret.  An example can be found in [config/samples/k8s_v1_bitwardensecret.yaml](config/samples/k8s_v1_bitwardensecret.yaml):  `kubectl apply -f -n some-namespace config/samples/k8s_v1_bitwardensecret.yaml`
+1. Create an instances of BitwardenSecret.  An example can be found in [config/samples/k8s_v1_bitwardensecret.yaml](config/samples/k8s_v1_bitwardensecret.yaml):  `kubectl apply -n some-namespace -f config/samples/k8s_v1_bitwardensecret.yaml`
 
 ### Alternative: Running on a cluster using a registry
 
@@ -113,7 +113,7 @@ The following sections describe how to test the container image itself.  Up to t
 
 1. Create a secret to house the Secrets Manager authentication token in the namespace where you will be creating your BitwardenSecret object: `kubectl create secret generic bw-auth-token -n some-namespace --from-literal=token="<Auth-Token-Here>"`
 
-1. Create an instances of BitwardenSecret.  An example can be found in [config/samples/k8s_v1_bitwardensecret.yaml](config/samples/k8s_v1_bitwardensecret.yaml):  `kubectl apply -f -n some-namespace config/samples/k8s_v1_bitwardensecret.yaml`
+1. Create an instances of BitwardenSecret.  An example can be found in [config/samples/k8s_v1_bitwardensecret.yaml](config/samples/k8s_v1_bitwardensecret.yaml):  `kubectl apply -n some-namespace -f config/samples/k8s_v1_bitwardensecret.yaml`
 
 ### Undeploy controller
 
