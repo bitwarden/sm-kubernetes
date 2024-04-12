@@ -38,13 +38,16 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	sdk "github.com/bitwarden/sdk/languages/go"
 	operatorsv1 "github.com/bitwarden/sm-kubernetes/api/v1"
@@ -978,6 +981,584 @@ var _ = Describe("Bitwarden Secrets Controller", Ordered, func() {
 			return err != nil && errors.IsNotFound(err)
 		}, timeout, interval).Should(BeTrue())
 	})
+
+	It("Creates and requeues for the next round", func() {
+		SetupDefaultCtrlMocks()
+
+		authSecret := corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:        authSecretName,
+				Namespace:   namespace,
+				Labels:      map[string]string{},
+				Annotations: map[string]string{},
+			},
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "Secret",
+				APIVersion: "v1",
+			},
+			Type: corev1.SecretTypeOpaque,
+			Data: map[string][]byte{authSecretKey: []byte(authSecretValue)},
+		}
+
+		Expect(k8sClient.Create(ctx, &authSecret)).Should(Succeed())
+		bwSecret := operatorsv1.BitwardenSecret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      name,
+				Namespace: namespace,
+				Labels: map[string]string{
+					"label-key": "label-value",
+				},
+			},
+			Spec: operatorsv1.BitwardenSecretSpec{
+				OrganizationId: orgId.String(),
+				SecretName:     secretName,
+				AuthToken: operatorsv1.AuthToken{
+					SecretName: authSecretName,
+					SecretKey:  authSecretKey,
+				},
+			},
+		}
+
+		s := runtime.NewScheme()
+
+		if err := operatorsv1.AddToScheme(s); err != nil {
+			t.Fatalf("Unable to add route scheme: (%v)", err)
+		}
+
+		objs := []runtime.Object{&bwSecret, &authSecret}
+
+		cl := fake.NewClientBuilder().
+			WithRuntimeObjects(objs...).
+			Build()
+
+		r := &BitwardenSecretReconciler{
+			Client:                 cl,
+			Scheme:                 s,
+			BitwardenClientFactory: mockFactory,
+			StatePath:              statePath,
+			RefreshIntervalSeconds: refreshInterval,
+		}
+
+		req := reconcile.Request{
+			NamespacedName: types.NamespacedName{
+				Name:      name,
+				Namespace: namespace,
+			},
+		}
+
+		res, err := r.Reconcile(ctx, req)
+		Expect(err).Should(BeNil())
+		Expect(res.RequeueAfter).Should(Equal(time.Duration(300) * time.Second))
+
+		k8sSecretName := types.NamespacedName{Name: secretName, Namespace: namespace}
+		k8sSecret := &corev1.Secret{}
+		err = r.Client.Get(ctx, k8sSecretName, k8sSecret)
+		Expect(err).Should(BeNil())
+		Expect(k8sSecret).ShouldNot(BeNil())
+	})
+
+	It("Creates and requeues for the next round", func() {
+		SetupDefaultCtrlMocks()
+
+		authSecret := corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:        authSecretName,
+				Namespace:   namespace,
+				Labels:      map[string]string{},
+				Annotations: map[string]string{},
+			},
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "Secret",
+				APIVersion: "v1",
+			},
+			Type: corev1.SecretTypeOpaque,
+			Data: map[string][]byte{authSecretKey: []byte(authSecretValue)},
+		}
+
+		Expect(k8sClient.Create(ctx, &authSecret)).Should(Succeed())
+		bwSecret := operatorsv1.BitwardenSecret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      name,
+				Namespace: namespace,
+				Labels: map[string]string{
+					"label-key": "label-value",
+				},
+			},
+			Spec: operatorsv1.BitwardenSecretSpec{
+				OrganizationId: orgId.String(),
+				SecretName:     secretName,
+				AuthToken: operatorsv1.AuthToken{
+					SecretName: authSecretName,
+					SecretKey:  authSecretKey,
+				},
+			},
+		}
+
+		s := runtime.NewScheme()
+
+		if err := operatorsv1.AddToScheme(s); err != nil {
+			t.Fatalf("Unable to add route scheme: (%v)", err)
+		}
+
+		objs := []runtime.Object{&bwSecret, &authSecret}
+
+		cl := fake.NewClientBuilder().
+			WithRuntimeObjects(objs...).
+			Build()
+
+		r := &BitwardenSecretReconciler{
+			Client:                 cl,
+			Scheme:                 s,
+			BitwardenClientFactory: mockFactory,
+			StatePath:              statePath,
+			RefreshIntervalSeconds: refreshInterval,
+		}
+
+		req := reconcile.Request{
+			NamespacedName: types.NamespacedName{
+				Name:      name,
+				Namespace: namespace,
+			},
+		}
+
+		res, err := r.Reconcile(ctx, req)
+		Expect(err).Should(BeNil())
+		Expect(res.RequeueAfter).Should(Equal(time.Duration(300) * time.Second))
+
+		k8sSecretName := types.NamespacedName{Name: secretName, Namespace: namespace}
+		k8sSecret := &corev1.Secret{}
+		err = r.Client.Get(ctx, k8sSecretName, k8sSecret)
+		Expect(err).Should(BeNil())
+		Expect(k8sSecret).ShouldNot(BeNil())
+	})
+
+	It("Returns without requeuing if BitwardenSecret deleted.", func() {
+		SetupDefaultCtrlMocks()
+
+		authSecret := corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:        authSecretName,
+				Namespace:   namespace,
+				Labels:      map[string]string{},
+				Annotations: map[string]string{},
+			},
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "Secret",
+				APIVersion: "v1",
+			},
+			Type: corev1.SecretTypeOpaque,
+			Data: map[string][]byte{authSecretKey: []byte(authSecretValue)},
+		}
+
+		Expect(k8sClient.Create(ctx, &authSecret)).Should(Succeed())
+
+		s := runtime.NewScheme()
+
+		if err := operatorsv1.AddToScheme(s); err != nil {
+			t.Fatalf("Unable to add route scheme: (%v)", err)
+		}
+
+		objs := []runtime.Object{&authSecret}
+
+		cl := fake.NewClientBuilder().
+			WithRuntimeObjects(objs...).
+			Build()
+
+		r := &BitwardenSecretReconciler{
+			Client:                 cl,
+			Scheme:                 s,
+			BitwardenClientFactory: mockFactory,
+			StatePath:              statePath,
+			RefreshIntervalSeconds: refreshInterval,
+		}
+
+		req := reconcile.Request{
+			NamespacedName: types.NamespacedName{
+				Name:      name,
+				Namespace: namespace,
+			},
+		}
+
+		res, err := r.Reconcile(ctx, req)
+		Expect(err).Should(BeNil())
+		Expect(res.RequeueAfter).Should(Equal(time.Duration(0) * time.Second))
+
+		k8sSecretName := types.NamespacedName{Name: secretName, Namespace: namespace}
+		k8sSecret := &corev1.Secret{}
+		err = r.Client.Get(ctx, k8sSecretName, k8sSecret)
+		Expect(err).ShouldNot(BeNil())
+	})
+
+	It("Returns without requeuing if BitwardenSecret deleted.", func() {
+		SetupDefaultCtrlMocks()
+
+		authSecret := corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:        authSecretName,
+				Namespace:   namespace,
+				Labels:      map[string]string{},
+				Annotations: map[string]string{},
+			},
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "Secret",
+				APIVersion: "v1",
+			},
+			Type: corev1.SecretTypeOpaque,
+			Data: map[string][]byte{authSecretKey: []byte(authSecretValue)},
+		}
+
+		Expect(k8sClient.Create(ctx, &authSecret)).Should(Succeed())
+
+		s := runtime.NewScheme()
+
+		if err := operatorsv1.AddToScheme(s); err != nil {
+			t.Fatalf("Unable to add route scheme: (%v)", err)
+		}
+
+		objs := []runtime.Object{&authSecret}
+
+		cl := fake.NewClientBuilder().
+			WithRuntimeObjects(objs...).
+			Build()
+
+		r := &BitwardenSecretReconciler{
+			Client:                 cl,
+			Scheme:                 s,
+			BitwardenClientFactory: mockFactory,
+			StatePath:              statePath,
+			RefreshIntervalSeconds: refreshInterval,
+		}
+
+		req := reconcile.Request{
+			NamespacedName: types.NamespacedName{
+				Name:      name,
+				Namespace: namespace,
+			},
+		}
+
+		res, err := r.Reconcile(ctx, req)
+		Expect(err).Should(BeNil())
+		Expect(res.RequeueAfter).Should(Equal(time.Duration(0) * time.Second))
+
+		k8sSecretName := types.NamespacedName{Name: secretName, Namespace: namespace}
+		k8sSecret := &corev1.Secret{}
+		err = r.Client.Get(ctx, k8sSecretName, k8sSecret)
+		Expect(err).ShouldNot(BeNil())
+	})
+
+	It("Requeues if client throws error on BitwardenSecret lookup.", func() {
+		SetupDefaultCtrlMocks()
+
+		authSecret := corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:        authSecretName,
+				Namespace:   namespace,
+				Labels:      map[string]string{},
+				Annotations: map[string]string{},
+			},
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "Secret",
+				APIVersion: "v1",
+			},
+			Type: corev1.SecretTypeOpaque,
+			Data: map[string][]byte{authSecretKey: []byte(authSecretValue)},
+		}
+
+		Expect(k8sClient.Create(ctx, &authSecret)).Should(Succeed())
+
+		s := runtime.NewScheme()
+
+		if err := operatorsv1.AddToScheme(s); err != nil {
+			t.Fatalf("Unable to add route scheme: (%v)", err)
+		}
+
+		objs := []runtime.Object{&authSecret}
+
+		cl := fake.NewClientBuilder().
+			WithRuntimeObjects(objs...).
+			Build()
+
+		fcl := ErroringFakeClient{
+			shouldErrorOnGet:    true,
+			shouldErrorOnUpdate: false,
+			shouldErrorOnCreate: false,
+			shouldErrorOnDelete: false,
+			Client:              cl,
+			errorOnNames:        []types.NamespacedName{{Name: name, Namespace: namespace}},
+		}
+
+		r := &BitwardenSecretReconciler{
+			Client:                 &fcl,
+			Scheme:                 s,
+			BitwardenClientFactory: mockFactory,
+			StatePath:              statePath,
+			RefreshIntervalSeconds: refreshInterval,
+		}
+
+		req := reconcile.Request{
+			NamespacedName: types.NamespacedName{
+				Name:      name,
+				Namespace: namespace,
+			},
+		}
+
+		res, err := r.Reconcile(ctx, req)
+		Expect(err).ShouldNot(BeNil())
+		Expect(res.RequeueAfter).Should(Equal(time.Duration(300) * time.Second))
+
+		k8sSecretName := types.NamespacedName{Name: secretName, Namespace: namespace}
+		k8sSecret := &corev1.Secret{}
+		err = r.Client.Get(ctx, k8sSecretName, k8sSecret)
+		Expect(err).ShouldNot(BeNil())
+	})
+
+	It("Requeues if client throws error on BitwardenSecret lookup.", func() {
+		SetupDefaultCtrlMocks()
+
+		authSecret := corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:        authSecretName,
+				Namespace:   namespace,
+				Labels:      map[string]string{},
+				Annotations: map[string]string{},
+			},
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "Secret",
+				APIVersion: "v1",
+			},
+			Type: corev1.SecretTypeOpaque,
+			Data: map[string][]byte{authSecretKey: []byte(authSecretValue)},
+		}
+
+		Expect(k8sClient.Create(ctx, &authSecret)).Should(Succeed())
+
+		s := runtime.NewScheme()
+
+		if err := operatorsv1.AddToScheme(s); err != nil {
+			t.Fatalf("Unable to add route scheme: (%v)", err)
+		}
+
+		objs := []runtime.Object{&authSecret}
+
+		cl := fake.NewClientBuilder().
+			WithRuntimeObjects(objs...).
+			Build()
+
+		fcl := ErroringFakeClient{
+			shouldErrorOnGet:    true,
+			shouldErrorOnUpdate: false,
+			shouldErrorOnCreate: false,
+			shouldErrorOnDelete: false,
+			Client:              cl,
+			errorOnNames:        []types.NamespacedName{{Name: name, Namespace: namespace}},
+		}
+
+		r := &BitwardenSecretReconciler{
+			Client:                 &fcl,
+			Scheme:                 s,
+			BitwardenClientFactory: mockFactory,
+			StatePath:              statePath,
+			RefreshIntervalSeconds: refreshInterval,
+		}
+
+		req := reconcile.Request{
+			NamespacedName: types.NamespacedName{
+				Name:      name,
+				Namespace: namespace,
+			},
+		}
+
+		res, err := r.Reconcile(ctx, req)
+		Expect(err).ShouldNot(BeNil())
+		Expect(res.RequeueAfter).Should(Equal(time.Duration(300) * time.Second))
+
+		k8sSecretName := types.NamespacedName{Name: secretName, Namespace: namespace}
+		k8sSecret := &corev1.Secret{}
+		err = r.Client.Get(ctx, k8sSecretName, k8sSecret)
+		Expect(err).ShouldNot(BeNil())
+	})
+
+	It("Requeues if it fails to create the secret", func() {
+		SetupDefaultCtrlMocks()
+
+		authSecret := corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:        authSecretName,
+				Namespace:   namespace,
+				Labels:      map[string]string{},
+				Annotations: map[string]string{},
+			},
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "Secret",
+				APIVersion: "v1",
+			},
+			Type: corev1.SecretTypeOpaque,
+			Data: map[string][]byte{authSecretKey: []byte(authSecretValue)},
+		}
+
+		Expect(k8sClient.Create(ctx, &authSecret)).Should(Succeed())
+		bwSecret := operatorsv1.BitwardenSecret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      name,
+				Namespace: namespace,
+				Labels: map[string]string{
+					"label-key": "label-value",
+				},
+			},
+			Spec: operatorsv1.BitwardenSecretSpec{
+				OrganizationId: orgId.String(),
+				SecretName:     secretName,
+				AuthToken: operatorsv1.AuthToken{
+					SecretName: authSecretName,
+					SecretKey:  authSecretKey,
+				},
+			},
+		}
+
+		s := runtime.NewScheme()
+
+		if err := operatorsv1.AddToScheme(s); err != nil {
+			t.Fatalf("Unable to add route scheme: (%v)", err)
+		}
+
+		objs := []runtime.Object{&bwSecret, &authSecret}
+
+		cl := fake.NewClientBuilder().
+			WithRuntimeObjects(objs...).
+			Build()
+
+		fcl := ErroringFakeClient{
+			shouldErrorOnGet:    false,
+			shouldErrorOnUpdate: false,
+			shouldErrorOnCreate: true,
+			shouldErrorOnDelete: false,
+			Client:              cl,
+			errorOnNames:        []types.NamespacedName{{Name: secretName, Namespace: namespace}},
+		}
+
+		r := &BitwardenSecretReconciler{
+			Client:                 &fcl,
+			Scheme:                 s,
+			BitwardenClientFactory: mockFactory,
+			StatePath:              statePath,
+			RefreshIntervalSeconds: refreshInterval,
+		}
+
+		req := reconcile.Request{
+			NamespacedName: types.NamespacedName{
+				Name:      name,
+				Namespace: namespace,
+			},
+		}
+
+		res, err := r.Reconcile(ctx, req)
+		Expect(err).ShouldNot(BeNil())
+		Expect(res.RequeueAfter).Should(Equal(time.Duration(300) * time.Second))
+
+		k8sSecretName := types.NamespacedName{Name: secretName, Namespace: namespace}
+		k8sSecret := &corev1.Secret{}
+		err = r.Client.Get(ctx, k8sSecretName, k8sSecret)
+		Expect(err).ShouldNot(BeNil())
+	})
+
+	It("Requeues if it fails to update the secret", func() {
+		SetupDefaultCtrlMocks()
+
+		authSecret := corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:        authSecretName,
+				Namespace:   namespace,
+				Labels:      map[string]string{},
+				Annotations: map[string]string{},
+			},
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "Secret",
+				APIVersion: "v1",
+			},
+			Type: corev1.SecretTypeOpaque,
+			Data: map[string][]byte{authSecretKey: []byte(authSecretValue)},
+		}
+
+		Expect(k8sClient.Create(ctx, &authSecret)).Should(Succeed())
+		bwSecret := operatorsv1.BitwardenSecret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      name,
+				Namespace: namespace,
+				Labels: map[string]string{
+					"label-key": "label-value",
+				},
+			},
+			Spec: operatorsv1.BitwardenSecretSpec{
+				OrganizationId: orgId.String(),
+				SecretName:     secretName,
+				AuthToken: operatorsv1.AuthToken{
+					SecretName: authSecretName,
+					SecretKey:  authSecretKey,
+				},
+			},
+		}
+
+		s := runtime.NewScheme()
+
+		if err := operatorsv1.AddToScheme(s); err != nil {
+			t.Fatalf("Unable to add route scheme: (%v)", err)
+		}
+
+		objs := []runtime.Object{&bwSecret, &authSecret}
+
+		cl := fake.NewClientBuilder().
+			WithRuntimeObjects(objs...).
+			Build()
+
+		fcl := ErroringFakeClient{
+			shouldErrorOnGet:    false,
+			shouldErrorOnUpdate: true,
+			shouldErrorOnCreate: false,
+			shouldErrorOnDelete: false,
+			Client:              cl,
+			errorOnNames:        []types.NamespacedName{{Name: secretName, Namespace: namespace}},
+		}
+
+		r := &BitwardenSecretReconciler{
+			Client:                 &fcl,
+			Scheme:                 s,
+			BitwardenClientFactory: mockFactory,
+			StatePath:              statePath,
+			RefreshIntervalSeconds: refreshInterval,
+		}
+
+		req := reconcile.Request{
+			NamespacedName: types.NamespacedName{
+				Name:      name,
+				Namespace: namespace,
+			},
+		}
+
+		res, err := r.Reconcile(ctx, req)
+		Expect(err).ShouldNot(BeNil())
+		Expect(res.RequeueAfter).Should(Equal(time.Duration(300) * time.Second))
+
+		k8sSecretName := types.NamespacedName{Name: secretName, Namespace: namespace}
+		k8sSecret := &corev1.Secret{}
+		err = fcl.Get(ctx, k8sSecretName, k8sSecret)
+		Expect(err).Should(BeNil())
+		Expect(k8sSecret).ShouldNot(BeNil())
+	})
+})
+
+var _ = Describe("Bitwarden Client Factory", func() {
+	It("Creates a client with the correct settings", func() {
+		api := "https://api.me"
+		ident := "https://ident.me"
+		expectedType, _ := sdk.NewBitwardenClient(&api, &ident)
+		factory := NewBitwardenClientFactory(api, ident)
+		client, err := factory.GetBitwardenClient()
+		Expect(err).Should(BeNil())
+		Expect(client).ShouldNot(BeNil())
+		Expect(client).Should(BeAssignableToTypeOf(expectedType))
+		Expect(factory.GetApiUrl()).Should(Equal(api))
+		Expect(factory.GetIdentityApiUrl()).Should(Equal(ident))
+	})
 })
 
 type GinkgoTestReporter struct{}
@@ -988,4 +1569,96 @@ func (g GinkgoTestReporter) Errorf(format string, args ...interface{}) {
 
 func (g GinkgoTestReporter) Fatalf(format string, args ...interface{}) {
 	Fail(fmt.Sprintf(format, args...))
+}
+
+type ErroringFakeClient struct {
+	client.Client
+	shouldErrorOnGet    bool
+	shouldErrorOnUpdate bool
+	shouldErrorOnCreate bool
+	shouldErrorOnDelete bool
+	errorOnNames        []types.NamespacedName
+}
+
+func (p *ErroringFakeClient) Get(
+	ctx context.Context,
+	key types.NamespacedName,
+	acc client.Object,
+	opts ...client.GetOption) error {
+
+	if p.shouldErrorOnGet {
+		nameToFail := false
+		for _, x := range p.errorOnNames {
+			if x.Namespace == key.Namespace && x.Name == key.Name {
+				nameToFail = true
+				break
+			}
+		}
+
+		if nameToFail {
+			return fmt.Errorf("Error getting")
+		}
+	}
+	return p.Client.Get(ctx, key, acc, opts...)
+}
+
+func (p *ErroringFakeClient) Update(
+	ctx context.Context,
+	acc client.Object,
+	opts ...client.UpdateOption) error {
+	if p.shouldErrorOnUpdate {
+		nameToFail := false
+		for _, x := range p.errorOnNames {
+			if x.Namespace == acc.GetNamespace() && x.Name == acc.GetName() {
+				nameToFail = true
+				break
+			}
+		}
+
+		if nameToFail {
+			return fmt.Errorf("Error updating")
+		}
+	}
+	return p.Client.Update(ctx, acc, opts...)
+}
+
+func (p *ErroringFakeClient) Create(
+	ctx context.Context,
+	acc client.Object,
+	opts ...client.CreateOption) error {
+	if p.shouldErrorOnCreate {
+		nameToFail := false
+		for _, x := range p.errorOnNames {
+			if x.Namespace == acc.GetNamespace() && x.Name == acc.GetName() {
+				nameToFail = true
+				break
+			}
+		}
+
+		if nameToFail {
+			return fmt.Errorf("Error creating")
+		}
+	}
+	return p.Client.Create(ctx, acc, opts...)
+}
+
+func (p *ErroringFakeClient) Delete(
+	ctx context.Context,
+	acc client.Object,
+	opts ...client.DeleteOption) error {
+	if p.shouldErrorOnDelete {
+
+		nameToFail := false
+		for _, x := range p.errorOnNames {
+			if x.Namespace == acc.GetNamespace() && x.Name == acc.GetName() {
+				nameToFail = true
+				break
+			}
+		}
+
+		if nameToFail {
+			return fmt.Errorf("Error deleting")
+		}
+	}
+	return p.Client.Delete(ctx, acc, opts...)
 }
