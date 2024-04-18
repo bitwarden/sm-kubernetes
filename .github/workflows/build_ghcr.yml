@@ -97,3 +97,9 @@ jobs:
           fi
 
           echo "*****OPERATOR OK*****"
+
+      - name: Clean-up
+        run: |
+          cd src/sm-operator
+          make undeploy
+          kind delete cluster
