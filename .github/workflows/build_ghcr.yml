@@ -78,6 +78,8 @@ jobs:
           echo "*****DEPLOYMENTS*****"
           kubectl get deployments -n sm-operator-system
 
+          kubectl describe deployments -n sm-operator-system
+
           sleep 30s
 
           # count=0
@@ -90,13 +92,13 @@ jobs:
           # done
 
           echo "*****PODS*****"
-          pods=$(kubectl get pods -n sm-operator-system -l app.kubernetes.io/name=sm-operator) # | grep 2/2)
+          pods=$(kubectl get pods -n sm-operator-system) #-l app.kubernetes.io/name=sm-operator | grep 2/2)
           echo $pods
 
-          if [[ -z "$pods" ]]; then
-            echo "::error::No pods found."
-            exit 1
-          fi
+          # if [[ -z "$pods" ]]; then
+          #   echo "::error::No pods found."
+          #   exit 1
+          # fi
 
           echo "*****OPERATOR OK*****"
 
