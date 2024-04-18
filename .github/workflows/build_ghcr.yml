@@ -79,9 +79,9 @@ jobs:
           kubectl get deployments -n sm-operator-system
 
           count=0
-          while [[ $(kubectl get pods -n sm-operator-system -l app=app.kubernetes.io/name=sm-operator -o jsonpath="{.items[*].status.containerStatuses[*].ready}") != "true" ]]; do
+          while [[ $(kubectl get pods -n sm-operator-system -l app.kubernetes.io/name=sm-operator -o jsonpath="{.items[*].status.containerStatuses[*].ready}") != "true" ]]; do
             sleep 1;
-            count=count+1
+            count=$count+1
             if [[ count -ge 30 ]]; then
               break
             fi
