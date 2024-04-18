@@ -62,3 +62,29 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.image-name.outputs.name }}
+
+      - name: Create kind cluster
+        uses: helm/kind-action@99576bfa6ddf9a8e612d83b513da5a75875caced # v1.9.0
+
+      - name: Smoke Test Image
+        id: smoke-test
+        env:
+          IMAGE: ${{ steps.image-name.outputs.name }}
+        run: |
+          cd src/sm-operator
+          make deploy IMG=$IMAGE
+
+          #For review purposes
+          echo "*****DEPLOYMENTS*****"
+          kubectl get deployments -n sm-operator-system
+
+          echo "*****PODS*****"
+          pods=$(kubectl get pods -l app.kubernetes.io/name=sm-operator -n sm-operator-system | grep 2/2)
+          echo $pods
+
+          if [[ -z "$pods" ]]; then
+            echo "::error::No pods found."
+            exit 1
+          fi
+
+          echo "*****OPERATOR OK*****"
