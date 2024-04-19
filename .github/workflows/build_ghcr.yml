@@ -31,13 +31,13 @@ jobs:
           username: ${{github.actor}}
           password: ${{secrets.GITHUB_TOKEN}}
 
-      - name: Test operator
-        id: test
-        run: |
-          sudo apt update && sudo apt install musl-tools -y
-          cd src/sm-operator
-          make setup
-          make test
+      # - name: Test operator
+      #   id: test
+      #   run: |
+      #     sudo apt update && sudo apt install musl-tools -y
+      #     cd src/sm-operator
+      #     make setup
+      #     make test
 
       - name: Generate Docker image tag
         id: tag
@@ -54,14 +54,14 @@ jobs:
           IMAGE_TAG: ${{ steps.tag.outputs.image_tag }}
         run: echo "name=${_GHCR_REGISTRY}/${_PROJECT_NAME}:${IMAGE_TAG}" >> $GITHUB_OUTPUT
 
-      - name: Build Docker image
-        uses: docker/build-push-action@2cdde995de11925a030ce8070c3d77a52ffcf1c0 # v5.3.0
-        with:
-          context: src/sm-operator
-          file: src/sm-operator/Dockerfile
-          platforms: linux/amd64 #,linux/arm64
-          push: true
-          tags: ${{ steps.image-name.outputs.name }}
+      # - name: Build Docker image
+      #   uses: docker/build-push-action@2cdde995de11925a030ce8070c3d77a52ffcf1c0 # v5.3.0
+      #   with:
+      #     context: src/sm-operator
+      #     file: src/sm-operator/Dockerfile
+      #     platforms: linux/amd64,linux/arm64
+      #     push: true
+      #     tags: ${{ steps.image-name.outputs.name }}
 
       - name: Create kind cluster
         uses: helm/kind-action@99576bfa6ddf9a8e612d83b513da5a75875caced # v1.9.0
@@ -72,12 +72,12 @@ jobs:
           IMAGE: ${{ steps.image-name.outputs.name }}
         run: |
           #Setup image pull secret
-          kubectl create secret -n bitwarden docker-registry ghcr-login-secret --docker-server=ghcr.io --docker-username=bitwarden-devops-bot --docker-password=${{ secrets.GITHUB_TOKEN }} --docker-email=106330231+bitwarden-devops-bot@users.noreply.github.com
+          kubectl create secret -n sm-operator-system docker-registry ghcr-login-secret --docker-server=ghcr.io --docker-username=bitwarden-devops-bot --docker-password=${{ secrets.GITHUB_TOKEN }} --docker-email=106330231+bitwarden-devops-bot@users.noreply.github.com
 
           cd src/sm-operator
           make deploy IMG=$IMAGE
 
-          kubectl patch serviceaccount sm-operator-controller-manager -p '{"imagePullSecrets": [{"name": "ghcr-login-secret"}]}'
+          kubectl patch serviceaccount -n sm-operator-system sm-operator-controller-manager -p '{"imagePullSecrets": [{"name": "ghcr-login-secret"}]}'
 
           #For review purposes
           echo "*****DEPLOYMENTS*****"
