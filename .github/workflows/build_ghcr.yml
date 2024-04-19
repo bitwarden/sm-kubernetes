@@ -71,13 +71,17 @@ jobs:
         env:
           IMAGE: ${{ steps.image-name.outputs.name }}
         run: |
+          kubectl create ns sm-operator-system
+
+          kubectl create secret -n sm-operator-system docker-registry ghcr-login-secret --docker-server=ghcr.io --docker-username=bitwarden-devops-bot --docker-password=${{ secrets.GITHUB_TOKEN }} --docker-email=106330231+bitwarden-devops-bot@users.noreply.github.com
+
+          kubectl patch serviceaccount -n sm-operator-system default -p '{"imagePullSecrets": [{"name": "ghcr-login-secret"}]}'
+
           cd src/sm-operator
           make deploy IMG=$IMAGE
 
           #Setup image pull secret
-          kubectl create secret -n sm-operator-system docker-registry ghcr-login-secret --docker-server=ghcr.io --docker-username=bitwarden-devops-bot --docker-password=${{ secrets.GITHUB_TOKEN }} --docker-email=106330231+bitwarden-devops-bot@users.noreply.github.com
 
-          kubectl patch serviceaccount -n sm-operator-system sm-operator-controller-manager -p '{"imagePullSecrets": [{"name": "ghcr-login-secret"}]}'
 
           #For review purposes
           echo "*****DEPLOYMENTS*****"
@@ -99,6 +103,8 @@ jobs:
           echo "*****PODS*****"
           pods=$(kubectl get pods -n sm-operator-system) #-l app.kubernetes.io/name=sm-operator | grep 2/2)
           echo $pods
+
+          kubectl describe pods -n sm-operator-system
 
           # if [[ -z "$pods" ]]; then
           #   echo "::error::No pods found."
