@@ -25,6 +25,8 @@ import (
 	"fmt"
 	"time"
 
+	"encoding/json"
+
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -130,7 +132,7 @@ func (r *BitwardenSecretReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 
 		//Creating new
 		if err != nil && errors.IsNotFound(err) {
-			k8sSecret = bwSecret.CreateK8sSecret()
+			k8sSecret = CreateK8sSecret(bwSecret)
 
 			// Cascading delete
 			if err := ctrl.SetControllerReference(bwSecret, k8sSecret, r.Scheme); err != nil {
@@ -152,9 +154,9 @@ func (r *BitwardenSecretReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 
 		UpdateSecretValues(k8sSecret, secrets)
 
-		bwSecret.ApplySecretMap(k8sSecret)
+		ApplySecretMap(bwSecret, k8sSecret)
 
-		err = bwSecret.SetK8sSecretAnnotations(k8sSecret)
+		err = SetK8sSecretAnnotations(bwSecret, k8sSecret)
 
 		if err != nil {
 			r.LogError(logger, ctx, bwSecret, err, fmt.Sprintf("Error setting annotations for  %s/%s", req.Namespace, req.Name))
@@ -271,4 +273,59 @@ func (r *BitwardenSecretReconciler) PullSecretManagerSecretDeltas(logger logr.Lo
 
 func UpdateSecretValues(secret *corev1.Secret, secrets map[string][]byte) {
 	secret.Data = secrets
+}
+
+func CreateK8sSecret(bwSecret *operatorsv1.BitwardenSecret) *corev1.Secret {
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        bwSecret.Spec.SecretName,
+			Namespace:   bwSecret.Namespace,
+			Labels:      map[string]string{},
+			Annotations: map[string]string{},
+		},
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "Secret",
+			APIVersion: "v1",
+		},
+		Type: corev1.SecretTypeOpaque,
+		Data: map[string][]byte{},
+	}
+	secret.ObjectMeta.Labels["k8s.bitwarden.com/bw-secret"] = string(bwSecret.UID)
+	return secret
+}
+
+func ApplySecretMap(bwSecret *operatorsv1.BitwardenSecret, secret *corev1.Secret) {
+	if secret.Data == nil {
+		secret.Data = map[string][]byte{}
+	}
+
+	if bwSecret.Spec.SecretMap != nil {
+		for _, mappedSecret := range bwSecret.Spec.SecretMap {
+			if value, containsKey := secret.Data[mappedSecret.BwSecretId]; containsKey {
+				secret.Data[mappedSecret.SecretKeyName] = value
+				delete(secret.Data, mappedSecret.BwSecretId)
+			}
+		}
+	}
+}
+
+func SetK8sSecretAnnotations(bwSecret *operatorsv1.BitwardenSecret, secret *corev1.Secret) error {
+
+	if secret.ObjectMeta.Annotations == nil {
+		secret.ObjectMeta.Annotations = map[string]string{}
+	}
+
+	secret.ObjectMeta.Annotations["k8s.bitwarden.com/sync-time"] = time.Now().UTC().Format(time.RFC3339Nano)
+
+	if bwSecret.Spec.SecretMap == nil {
+		delete(secret.ObjectMeta.Annotations, "k8s.bitwarden.com/custom-map")
+	} else {
+		bytes, err := json.MarshalIndent(bwSecret.Spec.SecretMap, "", "  ")
+		if err != nil {
+			return err
+		}
+		secret.ObjectMeta.Annotations["k8s.bitwarden.com/custom-map"] = string(bytes)
+	}
+
+	return nil
 }

@@ -74,7 +74,7 @@
 		{
 			"type": "shell",
 			"label": "kind-push",
-			"command": "make docker-save --directory ${workspaceFolder} && kind load image-archive ./sm-operator.tar && rm ./sm-operator.tar",
+			"command": "make docker-save --directory ${workspaceFolder} && kind load image-archive --name $(kubectl config current-context | grep -Po '(?<=kind-).*') ./sm-operator.tar && rm ./sm-operator.tar",
 			"problemMatcher": [],
 			"group": {
 				"kind": "none",
