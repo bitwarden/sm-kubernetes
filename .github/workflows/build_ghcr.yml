@@ -95,7 +95,7 @@ jobs:
           done
 
           echo "*****PODS*****"
-          pods=$(kubectl get pods -n sm-operator-system -l app.kubernetes.io/name=sm-operator | grep 2/2)
+          pods=$(kubectl get pods -n sm-operator-system -l app.kubernetes.io/name=sm-operator) # | grep 2/2)
           echo $pods
 
           if [[ -z "$pods" ]]; then
