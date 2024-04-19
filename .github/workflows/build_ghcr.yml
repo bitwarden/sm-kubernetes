@@ -74,7 +74,7 @@ jobs:
           cd src/sm-operator
           make deploy IMG=$IMAGE
 
-          #Setup image pull secret
+          #Setup image pull secret (Until repo is made public)
           kubectl create secret -n sm-operator-system docker-registry ghcr-login-secret --docker-server=ghcr.io --docker-username=bitwarden-devops-bot --docker-password=${{ secrets.GITHUB_TOKEN }} --docker-email=106330231+bitwarden-devops-bot@users.noreply.github.com
 
           kubectl patch deployment sm-operator-controller-manager -n sm-operator-system --patch-file "$GITHUB_WORKSPACE/.github/workflows/test_files/deployment-patch.yaml"
@@ -82,8 +82,6 @@ jobs:
           #For review purposes
           echo "*****DEPLOYMENTS*****"
           kubectl get deployments -n sm-operator-system
-
-          kubectl describe deployments -n sm-operator-system
 
           sleep 30s
 
@@ -100,10 +98,10 @@ jobs:
           pods=$(kubectl get pods -n sm-operator-system) #-l app.kubernetes.io/name=sm-operator | grep 2/2)
           echo $pods
 
-          # if [[ -z "$pods" ]]; then
-          #   echo "::error::No pods found."
-          #   exit 1
-          # fi
+          if [[ -z "$pods" ]]; then
+            echo "::error::No pods found."
+            exit 1
+          fi
 
           echo "*****OPERATOR OK*****"
 
