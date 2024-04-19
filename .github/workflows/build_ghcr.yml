@@ -86,7 +86,7 @@ jobs:
           # sleep 30s
 
           count=0
-          while [[ $(kubectl get pods -n sm-operator-system -l app.kubernetes.io/name=sm-operator -o jsonpath="{.items[*].status.containerStatuses[*].ready}") != "true" ]]; do
+          while [[ $(kubectl get pods -n sm-operator-system -l control-plane=controller-manager -o jsonpath="{.items[*].status.containerStatuses[*].ready}") != "true" ]]; do
             sleep 1;
             count=$count+1
             if [[ count -ge 30 ]]; then
@@ -95,7 +95,7 @@ jobs:
           done
 
           echo "*****PODS*****"
-          pods=$(kubectl get pods -n sm-operator-system -l app.kubernetes.io/name=sm-operator) # | grep 2/2)
+          pods=$(kubectl get pods -n sm-operator-system -l control-plane=controller-manager | grep 2/2)
           echo $pods
 
           if [[ -z "$pods" ]]; then
