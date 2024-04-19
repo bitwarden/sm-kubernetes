@@ -71,8 +71,13 @@ jobs:
         env:
           IMAGE: ${{ steps.image-name.outputs.name }}
         run: |
+          #Setup image pull secret
+          kubectl create secret -n bitwarden docker-registry ghcr-login-secret --docker-server=ghcr.io --docker-username=bitwarden-devops-bot --docker-password=${{ secrets.GITHUB_TOKEN }} --docker-email=106330231+bitwarden-devops-bot@users.noreply.github.com
+
           cd src/sm-operator
           make deploy IMG=$IMAGE
+
+          kubectl patch serviceaccount sm-operator-controller-manager -p '{"imagePullSecrets": [{"name": "ghcr-login-secret"}]}'
 
           #For review purposes
           echo "*****DEPLOYMENTS*****"
