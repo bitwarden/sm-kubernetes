@@ -1,0 +1,5 @@
+spec:
+    template:
+      spec:
+        imagePullSecrets:
+            - name: ghcr-login-secret
