@@ -27,7 +27,7 @@ For manual Linux setups:
 * [Docker](https://www.docker.com/) or [Podman](https://podman.io/) or another container engine
 * [Download the appropriate libbitwarden_c binary](https://github.com/bitwarden/sdk) for your OS and architecture to [src/sm-operator/bw-sdk/internal/cinterface/lib](src/sm-operator/bw-sdk/internal/cinterface/lib).  This can be done using `make setup`
 * A [Bitwarden Organization with Secrets Manager](https://bitwarden.com/help/sign-up-for-secrets-manager/).  You will need the organization ID GUID for your organization.
-* An [access token](https://bitwarden.com/help/access-tokens/) for a Secrets Manager service account tied to the projects you want to pull.
+* An [access token](https://bitwarden.com/help/access-tokens/) for a Secrets Manager machine account tied to the projects you want to pull.
 * A [Kind Cluster](https://kind.sigs.k8s.io/docs/user/quick-start/) or other local Kubernetes environment with Kubectl pointed to it as the current context for local development.
 
 ### Recommended

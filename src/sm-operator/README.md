@@ -55,12 +55,12 @@ be updated to change the behavior of the operator:
 
 ### BitwardenSecret
 
-Our operator is designed to look for the creation of a custom resource called a BitwardenSecret.  Think of the BitwardenSecret object as the synchronization settings that will be used by the operator to create and synchronize a Kubernetes secret. This Kubernetes secret will live inside of a namespace and will be injected with the data available to a Secrets Manager service account. The resulting Kubernetes secret will include all secrets that a specific service account has access to. The sample manifest ([config/samples/k8s_v1_bitwardensecret.yaml](config/samples/k8s_v1_bitwardensecret.yaml)) gives the basic structure of the BitwardenSecret.  The key settings that you will want to update are listed below:
+Our operator is designed to look for the creation of a custom resource called a BitwardenSecret.  Think of the BitwardenSecret object as the synchronization settings that will be used by the operator to create and synchronize a Kubernetes secret. This Kubernetes secret will live inside of a namespace and will be injected with the data available to a Secrets Manager machine account. The resulting Kubernetes secret will include all secrets that a specific machine account has access to. The sample manifest ([config/samples/k8s_v1_bitwardensecret.yaml](config/samples/k8s_v1_bitwardensecret.yaml)) gives the basic structure of the BitwardenSecret.  The key settings that you will want to update are listed below:
 
 * **metadata.name**: The name of the BitwardenSecret object you are deploying
 * **spec.organizationId**: The Bitwarden organization ID you are pulling Secrets Manager data from
 * **spec.secretName**: The name of the Kubernetes secret that will be created and injected with Secrets Manager data.
-* **spec.authToken**: The name of a secret inside of the Kubernetes namespace that the BitwardenSecrets object is being deployed into that contains the Secrets Manager service account authorization token being used to access secrets.
+* **spec.authToken**: The name of a secret inside of the Kubernetes namespace that the BitwardenSecrets object is being deployed into that contains the Secrets Manager machine account authorization token being used to access secrets.
 
 Secrets Manager does not guarantee unique secret names across projects, so by default secrets will be created with the Secrets Manager secret UUID used as the key.  To make your generated secret easier to use, you can create a map of Bitwarden Secret IDs to Kubernetes secret keys.  The generated secret will replace the Bitwarden Secret IDs with the mapped friendly name you provide.  Below are the map settings available:
 
