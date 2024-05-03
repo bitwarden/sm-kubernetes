@@ -6,7 +6,7 @@
 VERSION ?= 0.0.1-Beta
 
 SDKBINARYVERSION = 0.1.0
-SDKVERSION = v0.4.0
+SDKVERSION = v0.5.0
 
 # CHANNELS define the bundle channels used in the bundle.
 # Add a new line here if you would like to change its default config. (E.g CHANNELS = "candidate,fast,stable")
@@ -105,6 +105,7 @@ binaries: ## Setting up the SDK binaries.
 	cd $(LOCALBIN)/sdk/sdk-bws-$(SDKVERSION) && npm install && npm run schemas
 	cd $(LOCALBIN)/sdk/sdk-bws-$(SDKVERSION)/crates/bitwarden-c && cargo build --release
 	cp $(LOCALBIN)/sdk/sdk-bws-$(SDKVERSION)/target/release/libbitwarden_c.a bw-sdk/internal/cinterface/lib
+	rm -r $(LOCALBIN)/sdk
 
 .PHONY: setup
 setup: binaries ## Setting up the SDK binaries and setting up the sample .env file for use.  The URL in use is temporary.

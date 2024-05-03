@@ -16,9 +16,10 @@ COPY api/ api/
 COPY internal/controller/ internal/controller/
 COPY Makefile Makefile
 
-RUN apt update && apt install unzip musl-tools -y
+RUN apt update && apt install unzip musl-tools npm -y
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 
-RUN GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} make binaries
+RUN PATH="$PATH:/root/.cargo/bin" GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} make binaries
 
 RUN mkdir state
 
