@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 apt-get update
-apt-get install -y kubernetes-client musl-tools # kubectl
+apt-get install -y kubernetes-client musl-tools npm
 kind delete cluster --name sm-operator && kind create cluster --name sm-operator --config .devcontainer/common/kind-config.yaml
-# kind export kubeconfig
 
-PATH="$PATH:/usr/local/go/bin" make setup
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+
+PATH="$PATH:/usr/local/go/bin:/usr/bin:/root/.cargo/bin" make setup
 PATH="$PATH:/usr/local/go/bin" make install
 
 # shellcheck disable=SC2016

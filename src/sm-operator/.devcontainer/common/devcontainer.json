@@ -1,7 +1,9 @@
 {
   "name": "BW k8s Operator",
   "image": "mcr.microsoft.com/devcontainers/go:1.21",
-  "runArgs": ["--network=host"], // needed for kind
+  "runArgs": [
+    "--network=host"
+  ], // needed for kind
   "postCreateCommand": "sudo .devcontainer/common/postCreateCommand.sh",
   "customizations": {
     "vscode": {
@@ -22,10 +24,11 @@
     "ghcr.io/meaningful-ooo/devcontainer-features/fish:1": {
       "fisher": true
     },
-    "ghcr.io/devcontainers-contrib/features/kind:1": {}
+    "ghcr.io/devcontainers-contrib/features/kind:1": {},
+    // "ghcr.io/devcontainers/features/node:1": {},
+    // "ghcr.io/devcontainers/features/rust:1": {}
   },
-  "secrets": {
-  },
+  "secrets": {},
   "mounts": [
     "source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind"
   ],

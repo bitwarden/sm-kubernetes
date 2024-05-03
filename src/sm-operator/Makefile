@@ -6,6 +6,7 @@
 VERSION ?= 0.0.1-Beta
 
 SDKBINARYVERSION = 0.1.0
+SDKVERSION = v0.4.0
 
 # CHANNELS define the bundle channels used in the bundle.
 # Add a new line here if you would like to change its default config. (E.g CHANNELS = "candidate,fast,stable")
@@ -97,22 +98,13 @@ help: ## Display this help.
 	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n"} /^[a-zA-Z_0-9-]+:.*?##/ { printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
 
 .PHONY: binaries
-OS=$(shell go env GOOS)
-ARCH=$(shell go env GOARCH)
-OS_STRING=unknown-linux-gnu
-ARCH_STRING=x86_64
-ifeq ($(OS),windows)
-	OS_STRING=pc-windows-msvc
-endif
-ifeq ($(OS),darwin)
-	OS_STRING=apple-darwin
-endif
-ifeq ($(ARCH),arm64)
-	ARCH_STRING=aarch64
-endif
-binaries: ## Setting up the SDK binaries.  The URL in use is temporary.
+binaries: ## Setting up the SDK binaries.
 	mkdir -p bw-sdk/internal/cinterface/lib
-	curl -sSLo temp.zip --url https://github.com/coltonhurst/go-module-test/releases/download/test-release/libbitwarden_c_files-$(ARCH_STRING)-$(OS_STRING)-$(SDKBINARYVERSION).zip && unzip -o -q temp.zip -d bw-sdk/internal/cinterface/lib && rm temp.zip
+	mkdir -p $(LOCALBIN)/sdk
+	curl -sSLo $(LOCALBIN)/temp.zip --url https://github.com/bitwarden/sdk/archive/refs/tags/bws-$(SDKVERSION).zip && unzip -o -q $(LOCALBIN)/temp.zip -d $(LOCALBIN)/sdk && rm $(LOCALBIN)/temp.zip
+	cd $(LOCALBIN)/sdk/sdk-bws-$(SDKVERSION) && npm install && npm run schemas
+	cd $(LOCALBIN)/sdk/sdk-bws-$(SDKVERSION)/crates/bitwarden-c && cargo build --release
+	cp $(LOCALBIN)/sdk/sdk-bws-$(SDKVERSION)/target/release/libbitwarden_c.a bw-sdk/internal/cinterface/lib
 
 .PHONY: setup
 setup: binaries ## Setting up the SDK binaries and setting up the sample .env file for use.  The URL in use is temporary.
