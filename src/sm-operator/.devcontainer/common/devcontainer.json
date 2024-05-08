@@ -1,0 +1,39 @@
+{
+  "name": "BW k8s Operator",
+  "image": "mcr.microsoft.com/devcontainers/go:1.21",
+  "runArgs": ["--network=host"], // needed for kind
+  "postCreateCommand": "sudo .devcontainer/common/postCreateCommand.sh",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "golang.go",
+        "ms-kubernetes-tools.vscode-kubernetes-tools",
+        "ms-azuretools.vscode-docker"
+      ],
+      "settings": {}
+    }
+  },
+  "features": {
+    "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {
+      "runArgs": [
+        "--privileged"
+      ]
+    },
+    "ghcr.io/meaningful-ooo/devcontainer-features/fish:1": {
+      "fisher": true
+    },
+    "ghcr.io/devcontainers-contrib/features/kind:1": {}
+  },
+  "secrets": {
+  },
+  "mounts": [
+    "source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind"
+  ],
+  "remoteEnv": {
+    "BWS_ACCESS_TOKEN": "${localEnv:BWS_ACCESS_TOKEN}",
+    "BW_API_URL": "${localEnv:BW_API_URL}",
+    "BW_IDENTITY_API_URL": "${localEnv:BW_IDENTITY_API_URL}",
+    "BW_SECRETS_MANAGER_REFRESH_INTERVAL": "${localEnv:BW_SECRETS_MANAGER_REFRESH_INTERVAL}"
+  },
+  "remoteUser": "root" // needed for kind: https://github.com/kubernetes-sigs/kind/issues/3196#issuecomment-1537260166
+}

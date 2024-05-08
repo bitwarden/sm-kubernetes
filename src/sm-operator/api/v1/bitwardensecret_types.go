@@ -22,11 +22,6 @@ Trademark Guidelines
 package v1
 
 import (
-	"encoding/json"
-	"fmt"
-	"time"
-
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -68,59 +63,6 @@ type SecretMap struct {
 	// The name of the mapped key in the created Kubernetes secret
 	// +kubebuilder:Required
 	SecretKeyName string `json:"secretKeyName"`
-}
-
-func (bwSecret *BitwardenSecret) CreateK8sSecret() *corev1.Secret {
-	secret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:        bwSecret.Spec.SecretName,
-			Namespace:   bwSecret.Namespace,
-			Labels:      map[string]string{},
-			Annotations: map[string]string{},
-		},
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "Secret",
-			APIVersion: "v1",
-		},
-		Type: corev1.SecretTypeOpaque,
-		Data: map[string][]byte{},
-	}
-	secret.ObjectMeta.Labels["k8s.bitwarden.com/bw-secret"] = string(bwSecret.UID)
-	return secret
-}
-
-func (bwSecret *BitwardenSecret) ApplySecretMap(secret *corev1.Secret) {
-	if secret.Data == nil {
-		secret.Data = map[string][]byte{}
-	}
-
-	if bwSecret.Spec.SecretMap != nil {
-		for _, mappedSecret := range bwSecret.Spec.SecretMap {
-			secret.Data[mappedSecret.SecretKeyName] = secret.Data[mappedSecret.BwSecretId]
-			delete(secret.Data, mappedSecret.BwSecretId)
-		}
-	}
-}
-
-func (bwSecret *BitwardenSecret) SetK8sSecretAnnotations(secret *corev1.Secret) error {
-
-	if secret.ObjectMeta.Annotations == nil {
-		secret.ObjectMeta.Annotations = map[string]string{}
-	}
-
-	secret.ObjectMeta.Annotations["k8s.bitwarden.com/sync-time"] = fmt.Sprint(time.Now().UTC())
-
-	if bwSecret.Spec.SecretMap == nil {
-		delete(secret.ObjectMeta.Annotations, "k8s.bitwarden.com/custom-map")
-	} else {
-		bytes, err := json.MarshalIndent(bwSecret.Spec.SecretMap, "", "  ")
-		if err != nil {
-			return err
-		}
-		secret.ObjectMeta.Annotations["k8s.bitwarden.com/custom-map"] = string(bytes)
-	}
-
-	return nil
 }
 
 // BitwardenSecretStatus defines the observed state of BitwardenSecret

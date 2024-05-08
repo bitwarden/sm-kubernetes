@@ -1,0 +1,119 @@
+---
+name: Build GHCR
+
+on:
+  push:
+    paths-ignore:
+      - ".github/workflows/**"
+  workflow_dispatch:
+
+jobs:
+  build-docker:
+    name: Build Docker images
+    runs-on: ubuntu-22.04
+    env:
+      _GHCR_REGISTRY: ghcr.io/bitwarden
+      _PROJECT_NAME: sm-operator
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@68827325e0b33c7199eb31dd4e31fbe9023e06e3 #v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@d70bba72b1f3fd22344832f00baa16ece964efeb #v3
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@e92390c5fb421da1463c202d546fed0ec5c39f20 #v3.1.0
+        with:
+          registry: ghcr.io
+          username: ${{github.actor}}
+          password: ${{secrets.GITHUB_TOKEN}}
+
+      - name: Test operator
+        id: test
+        run: |
+          sudo apt update && sudo apt install musl-tools -y
+          cd src/sm-operator
+          make setup
+          make test
+          go tool cover -html=cover.out -o=cover.html
+
+
+      - name: Upload test coverage report artifact
+        uses: actions/upload-artifact@a8a3f3ad30e3422c9c7b888a15615d19a852ae32 # v3.1.3
+        with:
+          name: cover.html
+          path: src/sm-operator/cover.html
+          if-no-files-found: error
+
+      - name: Generate Docker image tag
+        id: tag
+        run: |
+          IMAGE_TAG=$(echo "${GITHUB_REF:11}" | sed "s#/#-#g")  # slash safe branch name
+          if [[ "$IMAGE_TAG" == "main" ]]; then
+            IMAGE_TAG=dev
+          fi
+          echo "image_tag=$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+      - name: Generate image full name
+        id: image-name
+        env:
+          IMAGE_TAG: ${{ steps.tag.outputs.image_tag }}
+        run: echo "name=${_GHCR_REGISTRY}/${_PROJECT_NAME}:${IMAGE_TAG}" >> $GITHUB_OUTPUT
+
+      - name: Build Docker image
+        uses: docker/build-push-action@2cdde995de11925a030ce8070c3d77a52ffcf1c0 # v5.3.0
+        with:
+          context: src/sm-operator
+          file: src/sm-operator/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.image-name.outputs.name }}
+
+      - name: Create kind cluster
+        uses: helm/kind-action@99576bfa6ddf9a8e612d83b513da5a75875caced # v1.9.0
+
+      - name: Smoke Test Image
+        id: smoke-test
+        env:
+          IMAGE: ${{ steps.image-name.outputs.name }}
+        run: |
+          cd src/sm-operator
+          make deploy IMG=$IMAGE
+
+          #Setup image pull secret (Until repo is made public)
+          kubectl create secret -n sm-operator-system docker-registry ghcr-login-secret --docker-server=ghcr.io --docker-username=bitwarden-devops-bot --docker-password=${{ secrets.GITHUB_TOKEN }} --docker-email=106330231+bitwarden-devops-bot@users.noreply.github.com
+
+          kubectl patch deployment sm-operator-controller-manager -n sm-operator-system --patch-file "$GITHUB_WORKSPACE/.github/workflows/test_files/deployment-patch.yaml"
+
+          count=0
+          while [[ $(kubectl get pods -n sm-operator-system -l control-plane=controller-manager -o jsonpath="{.items[*].status.containerStatuses[*].ready}") != "true" ]]; do
+            sleep 1;
+            count=$count+1
+            if [[ count -ge 30 ]]; then
+              break
+            fi
+          done
+
+          #For review purposes
+          echo "*****DEPLOYMENTS*****"
+          kubectl get deployments -n sm-operator-system
+
+          echo "*****PODS*****"
+          pods=$(kubectl get pods -n sm-operator-system -l control-plane=controller-manager | grep 2/2)
+          echo $pods
+
+          if [[ -z "$pods" ]]; then
+            echo "::error::No pods found."
+            exit 1
+          fi
+
+          echo "*****OPERATOR OK*****"
+
+      - name: Clean-up
+        run: |
+          cd src/sm-operator
+          make undeploy
+          kind delete cluster

@@ -11,8 +11,22 @@
             "mode": "debug",
             "program": "${workspaceFolder}/cmd/main.go",
             "cwd": "${workspaceFolder}",
-            "preLaunchTask": "build",
+            "buildFlags": ["-ldflags='-linkmode external -extldflags \"-static\"'"],
+            "envFile": "${workspaceFolder}/.env",
             "env": {
+                "CC": "musl-gcc"
+            }
+        },
+        {
+            "name": "Test current file",
+            "type": "go",
+            "request": "launch",
+            "mode": "test",
+            "program": "${relativeFileDirname}",
+            "cwd": "${relativeFileDirname}",
+            "buildFlags": ["-ldflags='-linkmode external -extldflags \"-static\"'"],
+            "env": {
+                "CC": "musl-gcc"
             }
         }
     ]

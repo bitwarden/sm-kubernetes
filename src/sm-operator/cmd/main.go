@@ -23,10 +23,15 @@ package main
 
 import (
 	"flag"
+	"fmt"
+	"net/url"
 	"os"
+	"strconv"
+	"strings"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
+
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
 	"k8s.io/apimachinery/pkg/runtime"
@@ -57,6 +62,7 @@ func main() {
 	var metricsAddr string
 	var enableLeaderElection bool
 	var probeAddr string
+
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
@@ -69,6 +75,14 @@ func main() {
 	flag.Parse()
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
+
+	bwApiUrl, identApiUrl, statePath, refreshIntervalSeconds, err := GetSettings()
+
+	if err != nil {
+		panic(err)
+	}
+
+	bwClientFactory := controller.NewBitwardenClientFactory(*bwApiUrl, *identApiUrl)
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:                 scheme,
@@ -95,8 +109,11 @@ func main() {
 	}
 
 	if err = (&controller.BitwardenSecretReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
+		Client:                 mgr.GetClient(),
+		Scheme:                 mgr.GetScheme(),
+		BitwardenClientFactory: bwClientFactory,
+		StatePath:              *statePath,
+		RefreshIntervalSeconds: *refreshIntervalSeconds,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "BitwardenSecret")
 		os.Exit(1)
@@ -117,4 +134,80 @@ func main() {
 		setupLog.Error(err, "problem running manager")
 		os.Exit(1)
 	}
+}
+
+func GetSettings() (*string, *string, *string, *int, error) {
+	bwApiUrl := strings.TrimSpace(os.Getenv("BW_API_URL"))
+	identApiUrl := strings.TrimSpace(os.Getenv("BW_IDENTITY_API_URL"))
+	statePath := strings.TrimSpace(os.Getenv("BW_SECRETS_MANAGER_STATE_PATH"))
+	refreshIntervalSecondsStr := strings.TrimSpace(os.Getenv("BW_SECRETS_MANAGER_REFRESH_INTERVAL"))
+	refreshIntervalSeconds := 300
+
+	if refreshIntervalSecondsStr != "" {
+		value, err := strconv.Atoi(refreshIntervalSecondsStr)
+
+		if err != nil {
+			setupLog.Error(err, fmt.Sprintf("Invalid refresh interval supplied: %s.  Defaulting to 300 seconds.", refreshIntervalSecondsStr))
+		} else if value >= 180 {
+			refreshIntervalSeconds = value
+		} else {
+			setupLog.Info(fmt.Sprintf("Refresh interval value is below the minimum allowed value of 180 seconds. Reverting to the default 300 seconds. Value supplied: %d", value))
+		}
+	}
+
+	if bwApiUrl != "" {
+		_, err := url.ParseRequestURI(bwApiUrl)
+
+		if err != nil {
+			setupLog.Error(err, fmt.Sprintf("Bitwarden API URL is not valid.  Value supplied: %s", bwApiUrl))
+			return nil, nil, nil, nil, err
+		}
+
+		u, err := url.Parse(bwApiUrl)
+
+		if err != nil || u.Scheme == "" || u.Host == "" {
+			message := fmt.Sprintf("Bitwarden API URL is not valid.  Value supplied: %s", bwApiUrl)
+			if err == nil {
+				err = fmt.Errorf(message)
+			}
+
+			setupLog.Error(err, message)
+			return nil, nil, nil, nil, err
+		}
+	}
+
+	if identApiUrl != "" {
+		_, err := url.ParseRequestURI(identApiUrl)
+
+		if err != nil {
+			setupLog.Error(err, fmt.Sprintf("Bitwarden Identity URL is not valid.  Value supplied: %s", identApiUrl))
+			return nil, nil, nil, nil, err
+		}
+
+		u, err := url.ParseRequestURI(identApiUrl)
+
+		if err != nil || u.Scheme == "" || u.Host == "" {
+			message := fmt.Sprintf("Bitwarden Identity URL is not valid.  Value supplied: %s", identApiUrl)
+			if err == nil {
+				err = fmt.Errorf(message)
+			}
+
+			setupLog.Error(err, message)
+			return nil, nil, nil, nil, err
+		}
+	}
+
+	if bwApiUrl == "" {
+		bwApiUrl = "https://api.bitwarden.com"
+	}
+
+	if identApiUrl == "" {
+		identApiUrl = "https://identity.bitwarden.com"
+	}
+
+	if statePath == "" {
+		statePath = "/var/bitwarden/state"
+	}
+
+	return &bwApiUrl, &identApiUrl, &statePath, &refreshIntervalSeconds, nil
 }
