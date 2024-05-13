@@ -10,7 +10,7 @@
     "npm"
   ],
   "devcontainer": {
-    "fileMatch": ["^./src/sm-operator/.devcontainer/common/devcontainer.json$"]
+    "fileMatch": ["^src/sm-operator/.devcontainer/common/devcontainer.json$"]
   },
   "packageRules": [
     {
