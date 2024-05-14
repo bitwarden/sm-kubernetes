@@ -1,13 +1,11 @@
 #!/usr/bin/env bash
 apt-get update
 apt-get install -y kubernetes-client musl-tools # kubectl
-kind delete cluster --name sm-operator && kind create cluster --name sm-operator --config .devcontainer/common/kind-config.yaml
-# kind export kubeconfig
+kind delete cluster --name sm-operator && kind create cluster --name sm-operator --config .devcontainer/kind-config.yaml
 
 PATH="$PATH:/usr/local/go/bin" make setup
 PATH="$PATH:/usr/local/go/bin" make install
 
-# shellcheck disable=SC2016
 echo '
 devcontainer setup complete!
 

@@ -38,7 +38,7 @@ jobs:
       - name: Get Version
         id: version
         run: |
-          VERSION=$(sed -nE 's/^VERSION\s+\?=\s+([^\s]+)/\1/p' src/sm-operator/Makefile)
+          VERSION=$(sed -nE 's/^VERSION\s+\?=\s+([^\s]+)/\1/p' Makefile)
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Get branch name

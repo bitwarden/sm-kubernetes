@@ -2,7 +2,7 @@
   "name": "BW k8s Operator",
   "image": "mcr.microsoft.com/devcontainers/go:1.21",
   "runArgs": ["--network=host"], // needed for kind
-  "postCreateCommand": "sudo .devcontainer/common/postCreateCommand.sh",
+  "postCreateCommand": "sudo .devcontainer/postCreateCommand.sh",
   "customizations": {
     "vscode": {
       "extensions": [
