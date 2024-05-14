@@ -14,7 +14,7 @@ You will need a Kubernetes cluster to run against. We recommend [KIND](https://s
 
 **Note:** Your controller will automatically use the current context in your kubeconfig file (i.e. whatever cluster `kubectl cluster-info` shows).
 
-This project uses the Secrets Manager golang SDK.  This SDK requires some binaries exist inside the project.  Run `make setup` to download the appropriate binaries into the project.  If you are using the Dev Container, this step has already been completed for you.
+Run `make setup` to generate an example `.env` file. If you are using the Dev Container, this step has already been completed for you.
 
 ### Pre-requisites
 
@@ -35,7 +35,6 @@ For manual Linux setups:
 * [Visual Studio Code Go Extension](https://marketplace.visualstudio.com/items?itemName=golang.go)
 * [kubectl](https://kubernetes.io/docs/tasks/tools/)
 * [Docker](https://www.docker.com/) or [Podman](https://podman.io/) or another container engine
-* [Download the appropriate libbitwarden_c binary](https://github.com/bitwarden/sdk) for your OS and architecture to [bw-sdk/internal/cinterface/lib](bw-sdk/internal/cinterface/lib).  This can be done using `make setup`
 * A [Bitwarden Organization with Secrets Manager](https://bitwarden.com/help/sign-up-for-secrets-manager/).  You will need the organization ID GUID for your organization.
 * An [access token](https://bitwarden.com/help/access-tokens/) for a Secrets Manager machine account tied to the projects you want to pull.
 * A [Kind Cluster](https://kind.sigs.k8s.io/docs/user/quick-start/) or other local Kubernetes environment with Kubectl pointed to it as the current context for local development.

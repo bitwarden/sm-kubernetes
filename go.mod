@@ -2,8 +2,6 @@ module github.com/bitwarden/sm-kubernetes
 
 go 1.21
 
-replace github.com/bitwarden/sdk/languages/go => ./bw-sdk
-
 require (
 	github.com/bitwarden/sdk/languages/go v0.0.0-00010101000000-000000000000
 	github.com/go-logr/logr v1.4.1

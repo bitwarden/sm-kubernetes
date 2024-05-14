@@ -96,26 +96,8 @@ all: build
 help: ## Display this help.
 	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n"} /^[a-zA-Z_0-9-]+:.*?##/ { printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
 
-.PHONY: binaries
-OS=$(shell go env GOOS)
-ARCH=$(shell go env GOARCH)
-OS_STRING=unknown-linux-gnu
-ARCH_STRING=x86_64
-ifeq ($(OS),windows)
-	OS_STRING=pc-windows-msvc
-endif
-ifeq ($(OS),darwin)
-	OS_STRING=apple-darwin
-endif
-ifeq ($(ARCH),arm64)
-	ARCH_STRING=aarch64
-endif
-binaries: ## Setting up the SDK binaries.  The URL in use is temporary.
-	mkdir -p bw-sdk/internal/cinterface/lib
-	curl -sSLo temp.zip --url https://github.com/coltonhurst/go-module-test/releases/download/test-release/libbitwarden_c_files-$(ARCH_STRING)-$(OS_STRING)-$(SDKBINARYVERSION).zip && unzip -o -q temp.zip -d bw-sdk/internal/cinterface/lib && rm temp.zip
-
 .PHONY: setup
-setup: binaries ## Setting up the SDK binaries and setting up the sample .env file for use.  The URL in use is temporary.
+setup: ## Setting up the sample .env file for use.
 ifeq ("$(wildcard .env)","")
 	cp .env.example .env
 endif

@@ -18,8 +18,6 @@ COPY Makefile Makefile
 
 RUN apt update && apt install unzip musl-tools -y
 
-RUN GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} make binaries
-
 RUN mkdir state
 
 RUN CC=musl-gcc CGO_ENABLED=1 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -a -ldflags '-linkmode external -extldflags "-static"' -o manager cmd/main.go
