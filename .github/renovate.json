@@ -9,8 +9,8 @@
     "gomod",
     "npm"
   ],
-  "devcontainer": {
-    "fileMatch": ["^./src/sm-operator/.devcontainer/common/devcontainer.json$"]
+  "constraints": {
+    "go": "1.21"
   },
   "packageRules": [
     {
