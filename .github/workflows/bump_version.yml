@@ -45,7 +45,7 @@ jobs:
 
       - name: Bump Version
         run: |
-          sed -i -E '/^VERSION\s+\?=\s+[^\s]+/!b;cVERSION ?= ${{ github.event.inputs.version_number }}' src/sm-operator/Makefile
+          sed -i -E '/^VERSION\s+\?=\s+[^\s]+/!b;cVERSION ?= ${{ github.event.inputs.version_number }}' Makefile
 
       - name: Setup git
         run: |
