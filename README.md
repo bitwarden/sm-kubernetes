@@ -24,7 +24,7 @@ A Visual Studio Code Dev Container is provided for development purposes, and han
 * [Docker](https://www.docker.com/) - Podman is not currently supported with our Dev Container
 * [Visual Studio Code Dev Containers Extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers)
 
-You will need to open a Visual Studio Code at the repository root to use the Dev Container.
+You will need to open Visual Studio Code at the repository root to use the Dev Container.
 
 For manual Linux setups:
 
@@ -55,11 +55,11 @@ This project aims to follow the Kubernetes [Operator pattern](https://kubernetes
 It uses [Controllers](https://kubernetes.io/docs/concepts/architecture/controller/),
 which provide a reconcile function responsible for synchronizing resources until the desired state is reached on the cluster.  The controller ([internal/controller/bitwardensecret_controller.go](internal/controller/bitwardensecret_controller.go)) is where the main synchronization/reconciliation takes place.  The types file ([api/v1/bitwardensecret_types.go](api/v1/bitwardensecret_types.go)) specifies the structure of the Custom Resource Definition used throughout the controller, as well as the manifest structure.
 
-The [config](config/) directory contains the generated manifest definitions for deployment and testing of the operator into kubernetes.
+The [config](config/) directory contains the generated manifest definitions for deployment and testing of the operator into Kubernetes.
 
 ## Modifying the API definitions
 
-If you are editing the API definitions via [api/v1/bitwardensecret_types.go](api/v1/bitwardensecret_types.go), re-generate the manifests such as the custom resource definition using:
+If you are editing the API definitions via [api/v1/bitwardensecret_types.go](api/v1/bitwardensecret_types.go), re-generate the manifests such as the Custom Resource Definition using:
 
 ```sh
 make manifests
@@ -79,7 +79,7 @@ More information can be found via the [Kubebuilder Documentation](https://book.k
 
 ### Configuration settings
 
-A `.env` file will be created underthis workspace's root directory once the Dev Container is created or `make setup` has been run. The following environment variable settings can
+A `.env` file will be created under this workspace's root directory once the Dev Container is created or `make setup` has been run. The following environment variable settings can
 be updated to change the behavior of the operator:
 
 * **BW_API_URL** - Sets the Bitwarden API URL that the Secrets Manager SDK uses. This is useful for self-host scenarios, as well as hitting European servers
@@ -111,7 +111,7 @@ To test the operator, we will create a BitwardenSecret object.  But first, we wi
 kubectl create secret generic bw-auth-token -n some-namespace --from-literal=token="<Auth-Token-Here>"
 ```
 
-Next, create an instances of BitwardenSecret.  An example can be found in [config/samples/k8s_v1_bitwardensecret.yaml](config/samples/k8s_v1_bitwardensecret.yaml):
+Next, create an instance of BitwardenSecret.  An example can be found in [config/samples/k8s_v1_bitwardensecret.yaml](config/samples/k8s_v1_bitwardensecret.yaml):
 
 ```shell
 kubectl apply -n some-namespace -f config/samples/k8s_v1_bitwardensecret.yaml
@@ -147,7 +147,7 @@ The following sections describe how to test the container image itself.  Up to t
 
 1. Create a secret to house the Secrets Manager authentication token in the namespace where you will be creating your BitwardenSecret object: `kubectl create secret generic bw-auth-token -n some-namespace --from-literal=token="<Auth-Token-Here>"`
 
-1. Create an instances of BitwardenSecret.  An example can be found in [config/samples/k8s_v1_bitwardensecret.yaml](config/samples/k8s_v1_bitwardensecret.yaml):  `kubectl apply -n some-namespace -f config/samples/k8s_v1_bitwardensecret.yaml`
+1. Create an instance of BitwardenSecret.  An example can be found in [config/samples/k8s_v1_bitwardensecret.yaml](config/samples/k8s_v1_bitwardensecret.yaml):  `kubectl apply -n some-namespace -f config/samples/k8s_v1_bitwardensecret.yaml`
 
 ### Undeploy controller
 
@@ -159,13 +159,13 @@ make undeploy
 
 ### Unit test
 
-Unit tests are current found in the following files:
+Unit tests are currently found in the following files:
 
 * internal/controller/suite_test.go
 
 * cmd/suite_test.go
 
-To run the unit tests, run `make test` from the root directory of this workspace.  To debug the unit tests, click on the file you would like to debug.  In the `Run and Debug` tab in Visual Studio Code, change the lanch configuration from "Debug" to "Test current file", and then press F5.  **NOTE: Using the Visual Studio Code "Testing" tab does not currently work due to VS Code not linking the static binaries correctly.**
+To run the unit tests, run `make test` from the root directory of this workspace.  To debug the unit tests, click on the file you would like to debug.  In the `Run and Debug` tab in Visual Studio Code, change the launch configuration from "Debug" to "Test current file", and then press F5.  **NOTE: Using the Visual Studio Code "Testing" tab does not currently work due to VS Code not linking the static binaries correctly.**
 
 ## Contributing
 
