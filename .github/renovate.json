@@ -9,8 +9,10 @@
     "gomod",
     "npm"
   ],
-  "constraints": {
-    "go": "1.21"
+  "force": {
+    "constraints": {
+      "go": "1.21"
+    }
   },
   "packageRules": [
     {
