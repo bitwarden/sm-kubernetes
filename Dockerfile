@@ -6,7 +6,6 @@ WORKDIR /workspace
 
 COPY go.mod go.mod
 COPY go.sum go.sum
-COPY bw-sdk/ bw-sdk/
 
 RUN go mod download
 
@@ -20,7 +19,7 @@ RUN apt update && apt install unzip musl-tools -y
 
 RUN mkdir state
 
-RUN CC=musl-gcc CGO_ENABLED=1 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -a -ldflags '-linkmode external -extldflags "-static"' -o manager cmd/main.go
+RUN CC=musl-gcc CGO_ENABLED=1 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -a -ldflags '-linkmode external -extldflags "-static -Wl,-unresolved-symbols=ignore-all"' -o manager cmd/main.go
 
 FROM gcr.io/distroless/base-debian12:nonroot
 WORKDIR /

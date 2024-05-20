@@ -117,7 +117,6 @@ func (r *BitwardenSecretReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	authToken := string(authK8sSecret.Data[bwSecret.Spec.AuthToken.SecretKey])
 	orgId := bwSecret.Spec.OrganizationId
 
-	// Delete deltas will be handled in the future
 	refresh, secrets, err := r.PullSecretManagerSecretDeltas(logger, orgId, authToken, lastSync.Time)
 
 	if err != nil {
@@ -221,10 +220,9 @@ func (r *BitwardenSecretReconciler) LogCompletion(logger logr.Logger, ctx contex
 	}
 }
 
-// This is currently pulling all secrets for a complete refresh.  In the future
-// we will have a delta pull method to only pull what has changed
-// First returned value is the Adds/Updates.  The second returned value is the array of removed IDs.  As the delta call doesn't exist, this is
-// included for future use
+// This function will determine if any secrets have been updated and return all secrets assigned to the machine account if so.
+// First returned value is a boolean stating if something changed or not.
+// The second returned value is a mapping of secret IDs and their values from Secrets Manager
 func (r *BitwardenSecretReconciler) PullSecretManagerSecretDeltas(logger logr.Logger, orgId string, authToken string, lastSync time.Time) (bool, map[string][]byte, error) {
 	bitwardenClient, err := r.BitwardenClientFactory.GetBitwardenClient()
 	if err != nil {
@@ -239,36 +237,23 @@ func (r *BitwardenSecretReconciler) PullSecretManagerSecretDeltas(logger logr.Lo
 	}
 
 	secrets := map[string][]byte{}
-	secretIds := []string{}
 
-	// Use a deltas endpoint in the future
-	smSecrets, err := bitwardenClient.GetSecrets().List(orgId)
+	smSecretResponse, err := bitwardenClient.GetSecrets().Sync(orgId, &lastSync)
 
 	if err != nil {
-		logger.Error(err, "Failed to list secrets")
+		logger.Error(err, "Failed to get secrets since last sync.")
 		return false, nil, err
 	}
 
-	for _, smSecret := range smSecrets.Data {
-		secretIds = append(secretIds, smSecret.ID)
-	}
+	smSecretVals := smSecretResponse.Secrets
 
-	// Use a deltas endpoint in the future
-	smSecretVals, err := bitwardenClient.GetSecrets().GetByIDS(secretIds)
-
-	if err != nil {
-		logger.Error(err, "Failed to get secrets by id")
-		return false, nil, err
-	}
-
-	for _, smSecretVal := range smSecretVals.Data {
+	for _, smSecretVal := range smSecretVals {
 		secrets[smSecretVal.ID] = []byte(smSecretVal.Value)
 	}
 
 	defer bitwardenClient.Close()
 
-	// Once a new deltas endpoint is setup, the first value will be the boolean of whether something has changed.
-	return true, secrets, nil
+	return smSecretResponse.HasChanges, secrets, nil
 }
 
 func UpdateSecretValues(secret *corev1.Secret, secrets map[string][]byte) {

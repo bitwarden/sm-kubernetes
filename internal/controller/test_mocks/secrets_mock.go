@@ -11,8 +11,9 @@ package controller_test_mocks
 
 import (
 	reflect "reflect"
+	"time"
 
-	sdk "github.com/bitwarden/sdk/languages/go"
+	sdk "github.com/tangowithfoxtrot/go-module-test"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -112,6 +113,21 @@ func (m *MockSecretsInterface) List(organizationID string) (*sdk.SecretIdentifie
 func (mr *MockSecretsInterfaceMockRecorder) List(organizationID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "List", reflect.TypeOf((*MockSecretsInterface)(nil).List), organizationID)
+}
+
+// Sync mocks base method.
+func (m *MockSecretsInterface) Sync(organizationID string, lastSyncedDate *time.Time) (*sdk.SecretsSyncResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Sync", organizationID, lastSyncedDate)
+	ret0, _ := ret[0].(*sdk.SecretsSyncResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Sync indicates an expected call of Sync.
+func (mr *MockSecretsInterfaceMockRecorder) Sync(organizationID any, lastSyncedDate any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Sync", reflect.TypeOf((*MockSecretsInterface)(nil).Sync), organizationID, lastSyncedDate)
 }
 
 // Update mocks base method.
