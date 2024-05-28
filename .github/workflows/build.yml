@@ -16,7 +16,7 @@ jobs:
       _PROJECT_NAME: sm-operator
     steps:
       - name: Checkout repo
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+        uses: actions/checkout@a5ac7e51b41094c92402da3b24376905380afc29 # v4.1.6
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@68827325e0b33c7199eb31dd4e31fbe9023e06e3 #v3
@@ -71,7 +71,7 @@ jobs:
           tags: ${{ steps.image-name.outputs.name }}
 
       - name: Create kind cluster
-        uses: helm/kind-action@99576bfa6ddf9a8e612d83b513da5a75875caced # v1.9.0
+        uses: helm/kind-action@0025e74a8c7512023d06dc019c617aa3cf561fde # v1.10.0
 
       - name: Smoke Test Image
         id: smoke-test
