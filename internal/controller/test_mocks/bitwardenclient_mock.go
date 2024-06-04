@@ -12,7 +12,7 @@ package controller_test_mocks
 import (
 	reflect "reflect"
 
-	sdk "github.com/bitwarden/sdk/languages/go"
+	sdk "github.com/bitwarden/sdk-go"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -65,30 +65,30 @@ func (mr *MockBitwardenClientInterfaceMockRecorder) Close() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*MockBitwardenClientInterface)(nil).Close))
 }
 
-// GetProjects mocks base method.
-func (m *MockBitwardenClientInterface) GetProjects() sdk.ProjectsInterface {
+// Projects mocks base method.
+func (m *MockBitwardenClientInterface) Projects() sdk.ProjectsInterface {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetProjects")
+	ret := m.ctrl.Call(m, "Projects")
 	ret0, _ := ret[0].(sdk.ProjectsInterface)
 	return ret0
 }
 
-// GetProjects indicates an expected call of GetProjects.
-func (mr *MockBitwardenClientInterfaceMockRecorder) GetProjects() *gomock.Call {
+// Projects indicates an expected call of Projects.
+func (mr *MockBitwardenClientInterfaceMockRecorder) Projects() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetProjects", reflect.TypeOf((*MockBitwardenClientInterface)(nil).GetProjects))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Projects", reflect.TypeOf((*MockBitwardenClientInterface)(nil).Projects))
 }
 
-// GetSecrets mocks base method.
-func (m *MockBitwardenClientInterface) GetSecrets() sdk.SecretsInterface {
+// Secrets mocks base method.
+func (m *MockBitwardenClientInterface) Secrets() sdk.SecretsInterface {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetSecrets")
+	ret := m.ctrl.Call(m, "Secrets")
 	ret0, _ := ret[0].(sdk.SecretsInterface)
 	return ret0
 }
 
-// GetSecrets indicates an expected call of GetSecrets.
-func (mr *MockBitwardenClientInterfaceMockRecorder) GetSecrets() *gomock.Call {
+// Secrets indicates an expected call of Secrets.
+func (mr *MockBitwardenClientInterfaceMockRecorder) Secrets() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSecrets", reflect.TypeOf((*MockBitwardenClientInterface)(nil).GetSecrets))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Secrets", reflect.TypeOf((*MockBitwardenClientInterface)(nil).Secrets))
 }

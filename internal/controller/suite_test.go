@@ -49,7 +49,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	sdk "github.com/bitwarden/sdk/languages/go"
+	sdk "github.com/bitwarden/sdk-go"
 	operatorsv1 "github.com/bitwarden/sm-kubernetes/api/v1"
 	controller_test_mocks "github.com/bitwarden/sm-kubernetes/internal/controller/test_mocks"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -145,53 +145,22 @@ var _ = Describe("Bitwarden Secrets Controller", Ordered, func() {
 	interval := time.Millisecond * 250
 
 	var (
-		t             GinkgoTestReporter
-		mockCtrl      *gomock.Controller
-		mockFactory   *controller_test_mocks.MockBitwardenClientFactory
-		mockClient    *controller_test_mocks.MockBitwardenClientInterface
-		mockSecrets   *controller_test_mocks.MockSecretsInterface
-		ctx           context.Context
-		cancel        context.CancelFunc
-		bwSecrets     sdk.SecretsResponse
-		bwSecretsList sdk.SecretIdentifiersResponse
-		reconciler    BitwardenSecretReconciler
+		t                 GinkgoTestReporter
+		mockCtrl          *gomock.Controller
+		mockFactory       *controller_test_mocks.MockBitwardenClientFactory
+		mockClient        *controller_test_mocks.MockBitwardenClientInterface
+		mockSecrets       *controller_test_mocks.MockSecretsInterface
+		ctx               context.Context
+		cancel            context.CancelFunc
+		bwSecretsResponse sdk.SecretsSyncResponse
+		reconciler        BitwardenSecretReconciler
 	)
 
 	SetupDefaultCtrlMocks := func() {
 		mockSecrets.
 			EXPECT().
-			List(gomock.Cond(func(x any) bool { return x.(string) == orgId.String() })).
-			Return(&bwSecretsList, nil).
-			AnyTimes()
-
-		mockSecrets.
-			EXPECT().
-			GetByIDS(gomock.Cond(func(x any) bool {
-				arr := x.([]string)
-				match := len(arr) == count
-
-				if match {
-					for i := 0; i < count; i++ {
-						found := false
-						matchMe := arr[i]
-						for j := 0; j < count; j++ {
-							matchTo := bwSecretsList.Data[j]
-
-							if matchMe == matchTo.ID {
-								found = true
-								break
-							}
-						}
-
-						match = found
-						if !match {
-							break
-						}
-					}
-				}
-				return match
-			})).
-			Return(&bwSecrets, nil).
+			Sync(gomock.Cond(func(x any) bool { return x.(string) == orgId.String() }), gomock.Any()).
+			Return(&bwSecretsResponse, nil).
 			AnyTimes()
 
 		mockClient.
@@ -202,7 +171,7 @@ var _ = Describe("Bitwarden Secrets Controller", Ordered, func() {
 
 		mockClient.
 			EXPECT().
-			GetSecrets().
+			Secrets().
 			Return(mockSecrets).
 			AnyTimes()
 
@@ -243,7 +212,6 @@ var _ = Describe("Bitwarden Secrets Controller", Ordered, func() {
 			Expect(err).ToNot(HaveOccurred(), "failed to run manager")
 		}()
 
-		listData := []sdk.SecretIdentifierResponse{}
 		secretsData := []sdk.SecretResponse{}
 
 		for i := 0; i < count; i++ {
@@ -253,7 +221,6 @@ var _ = Describe("Bitwarden Secrets Controller", Ordered, func() {
 				OrganizationID: orgId.String(),
 			}
 
-			listData = append(listData, identifier)
 			projectId := uuid.NewString()
 			secretsData = append(secretsData, sdk.SecretResponse{
 				CreationDate:   time.Now().String(),
@@ -267,14 +234,10 @@ var _ = Describe("Bitwarden Secrets Controller", Ordered, func() {
 			})
 		}
 
-		bwSecretsList = sdk.SecretIdentifiersResponse{
-			Data: listData,
+		bwSecretsResponse = sdk.SecretsSyncResponse{
+			HasChanges: true,
+			Secrets:    secretsData,
 		}
-
-		bwSecrets = sdk.SecretsResponse{
-			Data: secretsData,
-		}
-
 	})
 
 	BeforeEach(func() {
@@ -386,8 +349,8 @@ var _ = Describe("Bitwarden Secrets Controller", Ordered, func() {
 
 		Expect(len(k8sSecret.Data)).Should(Equal(count))
 		for i := 0; i < count; i++ {
-			id := bwSecrets.Data[i].ID
-			value := bwSecrets.Data[i].Value
+			id := bwSecretsResponse.Secrets[i].ID
+			value := bwSecretsResponse.Secrets[i].Value
 			Expect(string(k8sSecret.Data[id])).Should(Equal(value))
 		}
 
@@ -432,9 +395,9 @@ var _ = Describe("Bitwarden Secrets Controller", Ordered, func() {
 
 		Expect(k8sClient.Create(ctx, &authSecret)).Should(Succeed())
 		customMapping := []operatorsv1.SecretMap{ // Adding a map for the first 3 values
-			{BwSecretId: bwSecrets.Data[0].ID, SecretKeyName: uuid.NewString()},
-			{BwSecretId: bwSecrets.Data[1].ID, SecretKeyName: uuid.NewString()},
-			{BwSecretId: bwSecrets.Data[2].ID, SecretKeyName: uuid.NewString()},
+			{BwSecretId: bwSecretsResponse.Secrets[0].ID, SecretKeyName: uuid.NewString()},
+			{BwSecretId: bwSecretsResponse.Secrets[1].ID, SecretKeyName: uuid.NewString()},
+			{BwSecretId: bwSecretsResponse.Secrets[2].ID, SecretKeyName: uuid.NewString()},
 			{BwSecretId: uuid.NewString(), SecretKeyName: uuid.NewString()}, // Test to verify nothing will break if the source ID does not exist
 		}
 
@@ -519,10 +482,10 @@ var _ = Describe("Bitwarden Secrets Controller", Ordered, func() {
 			if i < 3 {
 				id = customMapping[i].SecretKeyName
 			} else {
-				id = bwSecrets.Data[i].ID
+				id = bwSecretsResponse.Secrets[i].ID
 			}
 
-			value := bwSecrets.Data[i].Value
+			value := bwSecretsResponse.Secrets[i].Value
 			Expect(string(k8sSecret.Data[id])).Should(Equal(value))
 		}
 
@@ -793,14 +756,14 @@ var _ = Describe("Bitwarden Secrets Controller", Ordered, func() {
 		}, timeout, interval).Should(BeTrue())
 	})
 
-	It("Fails to create synchronized K8s secret with Secrets List failure", func() {
+	It("Fails to create synchronized K8s secret with Secrets Sync failure", func() {
 		testError := errors.NewBadRequest("Something bad happened.")
 		apiUrl := "http://api.bitwarden.com"
 		identityUrl := "http://identity.bitwarden.com"
 
 		mockSecrets.
 			EXPECT().
-			List(gomock.Any()).
+			Sync(gomock.Any(), gomock.Any()).
 			Return(nil, testError).
 			AnyTimes()
 
@@ -887,7 +850,7 @@ var _ = Describe("Bitwarden Secrets Controller", Ordered, func() {
 		}, timeout, interval).Should(BeTrue())
 	})
 
-	It("Fails to create synchronized K8s secret with Secrets GetByIDs failure", func() {
+	It("Does not synchronize K8s secret due to with Secrets Sync returning false for HasChanges", func() {
 		testError := errors.NewBadRequest("Something bad happened.")
 		apiUrl := "http://api.bitwarden.com"
 		identityUrl := "http://identity.bitwarden.com"
@@ -912,6 +875,8 @@ var _ = Describe("Bitwarden Secrets Controller", Ordered, func() {
 
 		SetupDefaultCtrlMocks()
 
+		bwSecretsResponse.HasChanges = false
+
 		reconciler.BitwardenClientFactory = mockFactory
 
 		authSecret := corev1.Secret{
@@ -967,12 +932,8 @@ var _ = Describe("Bitwarden Secrets Controller", Ordered, func() {
 
 		Eventually(func() bool {
 			err := k8sClient.Get(ctx, bwSecretName, &bwSecret)
-			return err == nil && len(bwSecret.Status.Conditions) > 0
+			return err == nil && len(bwSecret.Status.Conditions) == 0
 		}, timeout, interval).Should(BeTrue())
-		Expect(bwSecret.Status.Conditions[0].Status).Should(Equal(metav1.ConditionFalse))
-		Expect(bwSecret.Status.Conditions[0].Reason).Should(Equal("ReconciliationFailed"))
-		Expect(bwSecret.Status.Conditions[0].Type).Should(Equal("FailedSync"))
-		Expect(bwSecret.Status.Conditions[0].Message).Should(Equal(fmt.Sprintf("Error pulling Secret Manager secrets from API => API: %s -- Identity: %s -- State: %s -- OrgId: %s  - %s", apiUrl, identityUrl, statePath, orgId, testError)))
 
 		Expect(k8sClient.Delete(ctx, &bwSecret)).Should(Succeed())
 
@@ -984,6 +945,8 @@ var _ = Describe("Bitwarden Secrets Controller", Ordered, func() {
 
 	It("Creates and requeues for the next round", func() {
 		SetupDefaultCtrlMocks()
+
+		bwSecretsResponse.HasChanges = true
 
 		authSecret := corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{

@@ -2,4 +2,3 @@
 # Ignore build and test binaries.
 bin/
 !bin/libbitwarden_c.so
-bw-sdk/internal/cinterface/lib/*

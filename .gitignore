@@ -49,7 +49,6 @@ Dockerfile.cross
 *~
 
 sm-operator.tar
-bw-sdk/internal/cinterface/lib/*
 **/__debug_bin*
 **/temp.zip
 **/.env

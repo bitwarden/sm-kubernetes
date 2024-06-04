@@ -96,26 +96,8 @@ all: build
 help: ## Display this help.
 	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n"} /^[a-zA-Z_0-9-]+:.*?##/ { printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
 
-.PHONY: binaries
-OS=$(shell go env GOOS)
-ARCH=$(shell go env GOARCH)
-OS_STRING=unknown-linux-gnu
-ARCH_STRING=x86_64
-ifeq ($(OS),windows)
-	OS_STRING=pc-windows-msvc
-endif
-ifeq ($(OS),darwin)
-	OS_STRING=apple-darwin
-endif
-ifeq ($(ARCH),arm64)
-	ARCH_STRING=aarch64
-endif
-binaries: ## Setting up the SDK binaries.  The URL in use is temporary.
-	mkdir -p bw-sdk/internal/cinterface/lib
-	curl -sSLo temp.zip --url https://github.com/coltonhurst/go-module-test/releases/download/test-release/libbitwarden_c_files-$(ARCH_STRING)-$(OS_STRING)-$(SDKBINARYVERSION).zip && unzip -o -q temp.zip -d bw-sdk/internal/cinterface/lib && rm temp.zip
-
 .PHONY: setup
-setup: binaries ## Setting up the SDK binaries and setting up the sample .env file for use.  The URL in use is temporary.
+setup: ## Setting up the sample .env file for use.
 ifeq ("$(wildcard .env)","")
 	cp .env.example .env
 endif
@@ -140,17 +122,17 @@ vet: ## Run go vet against code.
 
 .PHONY: test
 test: manifests generate fmt vet envtest ## Run tests.
-	CC=musl-gcc KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test -ldflags '-linkmode external -extldflags "-static"' ./... -coverprofile cover.out
+	CC=musl-gcc KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test -ldflags '-linkmode external -extldflags "-static -Wl,-unresolved-symbols=ignore-all"' ./... -coverprofile cover.out
 
 ##@ Build
 
 .PHONY: build
 build: manifests generate fmt vet ## Build manager binary.
-	CC=musl-gcc go build -ldflags '-linkmode external -extldflags "-static"' -o bin/manager cmd/main.go
+	CC=musl-gcc go build -ldflags '-linkmode external -extldflags "-static -Wl,-unresolved-symbols=ignore-all"' -o bin/manager cmd/main.go
 
 .PHONY: run
 run: manifests generate fmt vet ## Run a controller from your host.
-	CC=musl-gcc go run -ldflags '-linkmode external -extldflags "-static"' ./cmd/main.go
+	CC=musl-gcc go run -ldflags '-linkmode external -extldflags "-static -Wl,-unresolved-symbols=ignore-all"' ./cmd/main.go
 
 # If you wish built the manager image targeting other platforms you can use the --platform flag.
 # (i.e. docker build --platform linux/arm64 ). However, you must enable docker buildKit for it.
@@ -246,6 +228,7 @@ $(CONTROLLER_GEN): $(LOCALBIN)
 	test -s $(LOCALBIN)/controller-gen && $(LOCALBIN)/controller-gen --version | grep -q $(CONTROLLER_TOOLS_VERSION) || \
 	GOBIN=$(LOCALBIN) go install sigs.k8s.io/controller-tools/cmd/controller-gen@$(CONTROLLER_TOOLS_VERSION)
 
+## This has been locked down to an older version of envtest that supports 1.21.  When Operator-SDK supports 1.22, we can move back to using latest
 .PHONY: envtest
 envtest: $(ENVTEST) ## Download envtest-setup locally if necessary.
 $(ENVTEST): $(LOCALBIN)
