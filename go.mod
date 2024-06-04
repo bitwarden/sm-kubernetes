@@ -3,11 +3,11 @@ module github.com/bitwarden/sm-kubernetes
 go 1.21.6
 
 require (
+	github.com/bitwarden/sdk-go v0.1.1
 	github.com/go-logr/logr v1.4.1
 	github.com/google/uuid v1.6.0
 	github.com/onsi/ginkgo/v2 v2.17.1
 	github.com/onsi/gomega v1.32.0
-	github.com/tangowithfoxtrot/go-module-test v0.0.0-20240520183714-dabe3b90238b
 	go.uber.org/mock v0.4.0
 	k8s.io/api v0.29.4
 	k8s.io/apimachinery v0.29.4

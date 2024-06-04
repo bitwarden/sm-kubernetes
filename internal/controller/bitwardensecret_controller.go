@@ -238,7 +238,7 @@ func (r *BitwardenSecretReconciler) PullSecretManagerSecretDeltas(logger logr.Lo
 
 	secrets := map[string][]byte{}
 
-	smSecretResponse, err := bitwardenClient.GetSecrets().Sync(orgId, &lastSync)
+	smSecretResponse, err := bitwardenClient.Secrets().Sync(orgId, &lastSync)
 
 	if err != nil {
 		logger.Error(err, "Failed to get secrets since last sync.")

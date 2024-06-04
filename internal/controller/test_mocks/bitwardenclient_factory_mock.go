@@ -12,7 +12,7 @@ package controller_test_mocks
 import (
 	reflect "reflect"
 
-	sdk "github.com/tangowithfoxtrot/go-module-test"
+	sdk "github.com/bitwarden/sdk-go"
 	gomock "go.uber.org/mock/gomock"
 )
 

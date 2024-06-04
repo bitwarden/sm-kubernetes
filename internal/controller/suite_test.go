@@ -49,9 +49,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
+	sdk "github.com/bitwarden/sdk-go"
 	operatorsv1 "github.com/bitwarden/sm-kubernetes/api/v1"
 	controller_test_mocks "github.com/bitwarden/sm-kubernetes/internal/controller/test_mocks"
-	sdk "github.com/tangowithfoxtrot/go-module-test"
 	ctrl "sigs.k8s.io/controller-runtime"
 	//+kubebuilder:scaffold:imports
 )
@@ -171,7 +171,7 @@ var _ = Describe("Bitwarden Secrets Controller", Ordered, func() {
 
 		mockClient.
 			EXPECT().
-			GetSecrets().
+			Secrets().
 			Return(mockSecrets).
 			AnyTimes()
 

@@ -13,7 +13,7 @@ import (
 	reflect "reflect"
 	"time"
 
-	sdk "github.com/tangowithfoxtrot/go-module-test"
+	sdk "github.com/bitwarden/sdk-go"
 	gomock "go.uber.org/mock/gomock"
 )
 
