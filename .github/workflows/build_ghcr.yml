@@ -80,9 +80,6 @@ jobs:
         run: |
           make deploy IMG=$IMAGE
 
-          #Setup image pull secret (Until repo is made public)
-          kubectl create secret -n sm-operator-system docker-registry ghcr-login-secret --docker-server=ghcr.io --docker-username=bitwarden-devops-bot --docker-password=${{ secrets.GITHUB_TOKEN }} --docker-email=106330231+bitwarden-devops-bot@users.noreply.github.com
-
           kubectl patch deployment sm-operator-controller-manager -n sm-operator-system --patch-file "$GITHUB_WORKSPACE/.github/workflows/test_files/deployment-patch.yaml"
 
           count=0
