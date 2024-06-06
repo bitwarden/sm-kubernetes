@@ -80,8 +80,6 @@ jobs:
         run: |
           make deploy IMG=$IMAGE
 
-          kubectl patch deployment sm-operator-controller-manager -n sm-operator-system --patch-file "$GITHUB_WORKSPACE/.github/workflows/test_files/deployment-patch.yaml"
-
           count=0
           while [[ $(kubectl get pods -n sm-operator-system -l control-plane=controller-manager -o jsonpath="{.items[*].status.containerStatuses[*].ready}") != "true" ]]; do
             sleep 1;
