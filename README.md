@@ -2,6 +2,8 @@
 
 This Operator is a tool for teams to integrate Bitwarden Secrets Manager into their Kubernetes workflows seamlessly.
 
+***NOTE:  This is a beta release and might be missing some functionality.***
+
 ## Description
 
 The sm-operator uses a [controller](internal/controller/bitwardensecret_controller.go) to synchronize Bitwarden Secrets into Kubernetes secrets.  It does so by registering a Custom Resource Definition of BitwardenSecret into the cluster.  It will listen for new BitwardenSecrets registered on the cluster and then synchronize on a configurable interval.
