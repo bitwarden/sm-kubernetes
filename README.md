@@ -2,8 +2,8 @@
 
 This Operator is a tool for teams to integrate Bitwarden Secrets Manager into their Kubernetes workflows seamlessly.
 
-[!NOTE]  
-This is a beta release and might be missing some functionality.***
+> [!NOTE]  
+> This is a beta release and might be missing some functionality.***
 
 ## Description
 
