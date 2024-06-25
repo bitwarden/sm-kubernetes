@@ -1,27 +1,27 @@
----
-name: Version Bump
+name: Bump version
 
 on:
   workflow_dispatch:
     inputs:
       version_number:
-        description: "New Version"
+        description: "New version number"
         required: true
 
 jobs:
   bump_version:
-    name: "Bump Version to ${{ github.event.inputs.version_number }}"
+    name: Bump version
     runs-on: ubuntu-22.04
     environment: Production
     permissions:
       contents: write
       pull-requests: write
+
     steps:
-      - name: Checkout Branch
+      - name: Check out repo
         uses: actions/checkout@a5ac7e51b41094c92402da3b24376905380afc29 # v4.1.6
 
-      - name: Login to Azure - CI Subscription
-        uses: Azure/login@e15b166166a8746d1a47596803bd8c1b595455cf # v1.6.0
+      - name: Log in to Azure
+        uses: Azure/login@cb79c773a3cfa27f31f25eb3f677781210c9ce3d # v1.6.1
         with:
           creds: ${{ secrets.AZURE_KV_CI_SERVICE_PRINCIPAL }}
 
@@ -40,14 +40,14 @@ jobs:
           git_user_signingkey: true
           git_commit_gpgsign: true
 
-      - name: "Create version_bump_${{ github.event.inputs.version_number }} branch"
+      - name: Create branch
         run: git switch -c version_bump_${{ github.event.inputs.version_number }}
 
-      - name: Bump Version
+      - name: Bump version
         run: |
           sed -i -E '/^VERSION\s+\?=\s+[^\s]+/!b;cVERSION ?= ${{ github.event.inputs.version_number }}' Makefile
 
-      - name: Setup git
+      - name: Set up Git
         run: |
           git config --local user.email "106330231+bitwarden-devops-bot@users.noreply.github.com"
           git config --local user.name "bitwarden-devops-bot"
@@ -70,7 +70,7 @@ jobs:
         if: ${{ steps.version-changed.outputs.changes_to_commit == 'TRUE' }}
         run: git push -u origin version_bump_${{ github.event.inputs.version_number }}
 
-      - name: Create Version PR
+      - name: Create version PR
         if: ${{ steps.version-changed.outputs.changes_to_commit == 'TRUE' }}
         id: create-pr
         env:

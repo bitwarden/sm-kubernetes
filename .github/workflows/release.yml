@@ -1,13 +1,12 @@
----
 name: Release
-run-name: Release - ${{ github.event.inputs.release_type }}
+run-name: Release ${{ github.event.inputs.release_type }}
 
 on:
   workflow_dispatch:
     inputs:
       release_type:
-        description: 'Release Options'
-        default: 'Initial Release'
+        description: "Release Options"
+        default: "Initial Release"
         type: choice
         options:
           - Initial Release
@@ -32,10 +31,10 @@ jobs:
             exit 1
           fi
 
-      - name: Checkout repo
+      - name: Check out repo
         uses: actions/checkout@a5ac7e51b41094c92402da3b24376905380afc29 # v4.1.6
 
-      - name: Get Version
+      - name: Get version
         id: version
         run: |
           VERSION=$(sed -nE 's/^VERSION\s+\?=\s+([^\s]+)/\1/p' Makefile)
@@ -48,7 +47,7 @@ jobs:
           echo "branch-name=$BRANCH_NAME" >> $GITHUB_OUTPUT
 
   release-github:
-    name: Create GitHub Release
+    name: Release
     if: ${{ github.event.inputs.release_type != 'Dry Run' }}
     runs-on: ubuntu-22.04
     needs: setup
@@ -75,6 +74,7 @@ jobs:
       _RELEASE_VERSION: ${{ needs.setup.outputs.release_version }}
       _BRANCH_NAME: ${{ needs.setup.outputs.branch-name }}
       _RELEASE_OPTION: ${{ github.event.inputs.release_type }}
+
     steps:
       - name: Print environment
         run: |
@@ -89,10 +89,10 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_PROD_KV_CREDENTIALS }}
 
-      - name: Login to Azure ACR
+      - name: Log in to Azure ACR
         run: az acr login -n ${_AZ_REGISTRY%.azurecr.io}
 
-      - name: Setup DCT
+      - name: Set up DCT
         id: setup-dct
         uses: bitwarden/gh-actions/setup-docker-trust@main
         with:
@@ -136,7 +136,6 @@ jobs:
 
       - name: Log out of Docker
         run: docker logout
-
 
   check-failures:
     name: Check for failures
