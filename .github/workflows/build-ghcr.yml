@@ -1,7 +1,10 @@
+---
 name: Build for GitHub Container Registry
 
 on:
   push:
+    branches:
+      - "main"
   workflow_dispatch:
 
 jobs:
