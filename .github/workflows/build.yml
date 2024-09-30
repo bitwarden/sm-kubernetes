@@ -7,7 +7,7 @@ on:
 jobs:
   build-docker:
     name: Build Docker images
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     env:
       _AZ_REGISTRY: bitwardenprod.azurecr.io
       _PROJECT_NAME: sm-operator

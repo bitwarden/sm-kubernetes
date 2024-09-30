@@ -17,7 +17,7 @@ on:
 jobs:
   setup:
     name: Setup
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     outputs:
       release_version: ${{ steps.version.outputs.version }}
       branch-name: ${{ steps.branch.outputs.branch-name }}
@@ -50,7 +50,7 @@ jobs:
   release-github:
     name: Release
     if: ${{ github.event.inputs.release_type != 'Dry Run' }}
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     needs: setup
     steps:
       - name: Create release
@@ -65,7 +65,7 @@ jobs:
 
   release-docker:
     name: Build Docker images
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     needs:
       - setup
       - release-github
@@ -141,7 +141,7 @@ jobs:
   check-failures:
     name: Check for failures
     if: always()
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     needs:
       - release-docker
       - release-github
