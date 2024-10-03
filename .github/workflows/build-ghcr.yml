@@ -10,7 +10,7 @@ on:
 jobs:
   build-docker:
     name: Build Docker images
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     env:
       _GHCR_REGISTRY: ghcr.io/bitwarden
       _PROJECT_NAME: sm-operator
