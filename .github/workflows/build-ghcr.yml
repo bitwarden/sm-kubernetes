@@ -1,4 +1,3 @@
----
 name: Build for GitHub Container Registry
 
 on:
