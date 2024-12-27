@@ -4,15 +4,12 @@
 #
 # https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
 
-# Default file owners
-* @bitwarden/team-secrets-manager-dev
+# Workflows ownership
+.github/workflows/build_ghcr.yml @bitwarden/dept-bre
+.github/workflows/build.yml @bitwarden/dept-bre
+.github/workflows/bump_version.yml @bitwarden/dept-bre
+.github/workflows/release.yml @bitwarden/dept-bre
 
-# Shared workflows ownership
-.github/workflows/build_ghcr.yml @bitwarden/dept-bre @bitwarden/team-secrets-manager-dev
-.github/workflows/build.yml @bitwarden/dept-bre @bitwarden/team-secrets-manager-dev
-.github/workflows/bump_version.yml @bitwarden/dept-bre @bitwarden/team-secrets-manager-dev
-.github/workflows/release.yml @bitwarden/dept-bre @bitwarden/team-secrets-manager-dev
-
-## Docker files have shared ownership ##
-Dockerfile @bitwarden/dept-bre @bitwarden/team-secrets-manager-dev
-.dockerignore @bitwarden/dept-bre @bitwarden/team-secrets-manager-dev
+## Docker files ownership ##
+Dockerfile @bitwarden/dept-bre
+.dockerignore @bitwarden/dept-bre
