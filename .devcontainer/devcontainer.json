@@ -1,6 +1,6 @@
 {
   "name": "BW k8s Operator",
-  "image": "mcr.microsoft.com/devcontainers/go:1.21",
+  "image": "mcr.microsoft.com/devcontainers/go:1.23",
   "runArgs": ["--network=host"], // needed for kind
   "postCreateCommand": "sudo .devcontainer/postCreateCommand.sh",
   "customizations": {
