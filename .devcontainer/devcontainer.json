@@ -19,7 +19,7 @@
         "--privileged"
       ]
     },
-    "ghcr.io/meaningful-ooo/devcontainer-features/fish:1": {
+    "ghcr.io/meaningful-ooo/devcontainer-features/fish:2": {
       "fisher": true
     },
     "ghcr.io/devcontainers-contrib/features/kind:1": {}
