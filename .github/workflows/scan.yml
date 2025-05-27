@@ -7,6 +7,8 @@ on:
       - "main"
   pull_request_target:
     types: [opened, synchronize]
+    branches:
+      - "main"
 
 # TODO: see https://bitwarden.atlassian.net/l/cp/SLtTZJ90 for configuration tips
 jobs:
