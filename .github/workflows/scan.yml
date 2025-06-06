@@ -10,11 +10,15 @@ on:
     branches:
       - "main"
 
+permissions: {}
+
 # TODO: see https://bitwarden.atlassian.net/l/cp/SLtTZJ90 for configuration tips
 jobs:
   check-run:
     name: Check PR run
     uses: bitwarden/gh-actions/.github/workflows/check-run.yml@main
+    permissions:
+      contents: read
 
   sast:
     name: SAST scan
