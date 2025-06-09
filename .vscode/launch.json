@@ -24,7 +24,7 @@
             "mode": "test",
             "program": "${relativeFileDirname}",
             "cwd": "${relativeFileDirname}",
-            "buildFlags": ["-ldflags='-linkmode external -extldflags \"-static -Wl,-unresolved-symbols=ignore-all\"'"],
+            "buildFlags": ["-ldflags=-linkmode external -extldflags '-static -Wl,-unresolved-symbols=ignore-all'"],
             "env": {
                 "CC": "musl-gcc"
             }
