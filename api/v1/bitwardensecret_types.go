@@ -50,7 +50,7 @@ type BitwardenSecretSpec struct {
 	// Defaults to true.
 	// +kubebuilder:validation:Optional
 	// +kubebuilder:default=true
-	OnlyMappedSecrets bool `json:"onlyMappedSecrets,omitempty"`
+	OnlyMappedSecrets bool `json:"onlyMappedSecrets"`
 }
 
 type AuthToken struct {

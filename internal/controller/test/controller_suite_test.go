@@ -63,6 +63,13 @@ var _ = BeforeSuite(func() {
 	rootPath, _ := findProjectRoot()
 	toolsPath := os.Getenv("KUBEBUILDER_ASSETS")
 
+	// Stop any existing envtest environment
+	if testEnv != nil {
+		GinkgoWriter.Println("Stopping existing envtest environment")
+		Expect(testEnv.Stop()).NotTo(HaveOccurred())
+		testEnv = nil
+	}
+
 	if toolsPath == "" {
 
 		k8sPath := filepath.Join(rootPath, "/bin/k8s")
@@ -93,8 +100,7 @@ var _ = BeforeSuite(func() {
 	By("bootstrapping test environment")
 	crdPath := filepath.Join(rootPath, "config/crd/bases")
 	testEnv = &envtest.Environment{
-		CRDDirectoryPaths: []string{crdPath},
-		//CRDDirectoryPaths:     []string{filepath.Join("..", "..", "..", "config", "crd", "bases")},
+		CRDDirectoryPaths:     []string{crdPath},
 		ErrorIfCRDPathMissing: true,
 	}
 

@@ -51,10 +51,11 @@ const (
 // BitwardenSecretReconciler reconciles a BitwardenSecret object
 type BitwardenSecretReconciler struct {
 	client.Client
-	Scheme                 *runtime.Scheme
-	BitwardenClientFactory BitwardenClientFactory
-	StatePath              string
-	RefreshIntervalSeconds int
+	Scheme                  *runtime.Scheme
+	BitwardenClientFactory  BitwardenClientFactory
+	StatePath               string
+	RefreshIntervalSeconds  int
+	SetK8sSecretAnnotations func(*operatorsv1.BitwardenSecret, *corev1.Secret) error
 }
 
 //+kubebuilder:rbac:groups=k8s.bitwarden.com,resources=bitwardensecrets,verbs=get;list;watch;create;update;patch;delete
@@ -182,7 +183,7 @@ func (r *BitwardenSecretReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 
 		ApplySecretMap(secrets, bwSecret, k8sSecret)
 
-		err = SetK8sSecretAnnotations(bwSecret, k8sSecret)
+		err = r.SetK8sSecretAnnotations(bwSecret, k8sSecret)
 
 		if err != nil {
 			r.LogWarning(logger, ctx, bwSecret, err, fmt.Sprintf("Error setting annotations for  %s/%s", req.NamespacedName.Namespace, req.Name)) //Annotation failure is not critical.  Log, but don't fail the process
@@ -213,6 +214,10 @@ func (r *BitwardenSecretReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *BitwardenSecretReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	if r.SetK8sSecretAnnotations == nil {
+		r.SetK8sSecretAnnotations = SetK8sSecretAnnotations
+	}
+
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&operatorsv1.BitwardenSecret{}).
 		Complete(r)
@@ -356,7 +361,7 @@ func FindSecretMapByBwSecretId(spec *operatorsv1.BitwardenSecretSpec, bwSecretId
 	return operatorsv1.SecretMap{}, false
 }
 
-func SetK8sSecretAnnotations(bwSecret *operatorsv1.BitwardenSecret, secret *corev1.Secret) error {
+var SetK8sSecretAnnotations = func(bwSecret *operatorsv1.BitwardenSecret, secret *corev1.Secret) error {
 	if secret.ObjectMeta.Annotations == nil {
 		secret.ObjectMeta.Annotations = make(map[string]string)
 	}
