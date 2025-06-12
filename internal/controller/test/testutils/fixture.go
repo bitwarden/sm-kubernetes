@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/onsi/ginkgo/v2"
 	"github.com/onsi/gomega"
@@ -31,6 +32,7 @@ import (
 )
 
 type TestFixture struct {
+	OrgId           string
 	Cfg             *rest.Config
 	K8sClient       client.Client
 	TestEnv         *envtest.Environment
@@ -57,6 +59,7 @@ func NewTestFixture(t *testing.T) *TestFixture {
 }
 
 func (f *TestFixture) setup(t *testing.T) {
+	f.OrgId = uuid.New().String()
 	logf.SetLogger(zap.New(zap.WriteTo(ginkgo.GinkgoWriter), zap.UseDevMode(true)))
 
 	// Find project root
@@ -99,6 +102,7 @@ func (f *TestFixture) setup(t *testing.T) {
 	f.K8sClient, err = client.New(f.Cfg, client.Options{Scheme: scheme.Scheme})
 	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 	gomega.Expect(f.K8sClient).NotTo(gomega.BeNil())
+	fmt.Fprintf(ginkgo.GinkgoWriter, "K8sClient initialized: %+v\n", f.K8sClient)
 
 	// Setup manager
 	k8sManager, err := ctrl.NewManager(f.Cfg, ctrl.Options{Scheme: scheme.Scheme})
@@ -109,10 +113,11 @@ func (f *TestFixture) setup(t *testing.T) {
 
 	// Initialize reconciler
 	f.Reconciler = controller.BitwardenSecretReconciler{
-		Client:                 k8sManager.GetClient(),
-		Scheme:                 k8sManager.GetScheme(),
-		RefreshIntervalSeconds: f.RefreshInterval,
-		StatePath:              f.StatePath,
+		Client:                  k8sManager.GetClient(),
+		Scheme:                  k8sManager.GetScheme(),
+		RefreshIntervalSeconds:  f.RefreshInterval,
+		StatePath:               f.StatePath,
+		SetK8sSecretAnnotations: controller.SetK8sSecretAnnotations,
 	}
 
 	// Setup mocks (will be initialized per test)
@@ -190,6 +195,92 @@ func (f *TestFixture) SetupDefaultCtrlMocks(failing bool, syncResponse *sdk.Secr
 		GetBitwardenClient().
 		Return(f.MockClient, nil).
 		AnyTimes()
+}
+
+func (f *TestFixture) CreateDefaultAuthSecret(namespace string) (*corev1.Secret, error) {
+	return f.CreateAuthSecret(AuthSecretName, namespace, AuthSecretKey, AuthSecretValue)
+}
+
+func (f *TestFixture) CreateAuthSecret(name, namespace, key, value string) (*corev1.Secret, error) {
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+		Data: map[string][]byte{
+			key: []byte(value),
+		},
+	}
+	err := f.K8sClient.Create(f.Ctx, secret)
+	if err != nil {
+		return nil, err
+	}
+	return secret, nil
+}
+
+func (f *TestFixture) CreateDefaultBitwardenSecret(namespace string, secretMap []operatorsv1.SecretMap) (*operatorsv1.BitwardenSecret, error) {
+	return f.CreateBitwardenSecret(BitwardenSecretName, namespace, string(f.OrgId), SynchronizedSecretName, AuthSecretName, AuthSecretKey, secretMap)
+}
+
+func (f *TestFixture) CreateBitwardenSecret(name, namespace, orgID, secretName, authSecretName, authSecretKey string, secretMap []operatorsv1.SecretMap) (*operatorsv1.BitwardenSecret, error) {
+	bwSecret := &operatorsv1.BitwardenSecret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+		Spec: operatorsv1.BitwardenSecretSpec{
+			AuthToken: operatorsv1.AuthToken{
+				SecretName: authSecretName,
+				SecretKey:  authSecretKey,
+			},
+			SecretName:     secretName,
+			OrganizationId: orgID,
+			SecretMap:      secretMap,
+		},
+	}
+	err := f.K8sClient.Create(f.Ctx, bwSecret)
+	if err != nil {
+		return nil, err
+	}
+	return bwSecret, nil
+}
+func (f *TestFixture) CreateDefaultSynchronizedSecret(namespace string, data map[string][]byte) (*corev1.Secret, error) {
+	return f.CreateSynchronizedSecret(SynchronizedSecretName, namespace, data)
+}
+
+func (f *TestFixture) CreateSynchronizedSecret(name string, namespace string, data map[string][]byte) (*corev1.Secret, error) {
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+			Labels:    map[string]string{},
+			Annotations: map[string]string{
+				controller.AnnotationSyncTime:  time.Now().UTC().Format(time.RFC3339),
+				controller.AnnotationCustomMap: "true",
+			},
+		},
+		Type: corev1.SecretTypeOpaque,
+		Data: data,
+	}
+	err := f.K8sClient.Create(f.Ctx, secret)
+	if err != nil {
+		return nil, err
+	}
+	return secret, nil
+}
+
+func (f *TestFixture) CleanDefaultSynchronizedSecret(namespace string) {
+	f.CleanSynchronizedSecret(SynchronizedSecretName, corev1.NamespaceNodeLease)
+}
+
+func (f *TestFixture) CleanSynchronizedSecret(name string, namespace string) {
+	synchronizedSecret := &corev1.Secret{}
+	err := f.K8sClient.Get(f.Ctx, types.NamespacedName{Name: name, Namespace: namespace}, synchronizedSecret)
+	if err == nil {
+		gomega.Expect(f.K8sClient.Delete(f.Ctx, synchronizedSecret)).Should(gomega.Succeed())
+	} else if !errors.IsNotFound(err) {
+		ginkgo.Fail(fmt.Sprintf("Failed to check target secret: %v", err))
+	}
 }
 
 func (f *TestFixture) CreateNamespace() string {
