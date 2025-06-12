@@ -67,10 +67,6 @@ import (
 )
 */
 
-var (
-	namespace string
-)
-
 var _ = Describe("BitwardenSecretReconciler", Ordered, func() {
 	authSecretValue := "abc-123"
 	orgId := uuid.New()
@@ -79,8 +75,6 @@ var _ = Describe("BitwardenSecretReconciler", Ordered, func() {
 	name := "bw-secret"
 	secretName := "bitwarden-k8s-secret-sample"
 	expectedNumOfSecrets := 10
-	// timeout := time.Second * 10
-	// interval := time.Millisecond * 250
 
 	var (
 		testReporter      GinkgoTestReporter
@@ -93,6 +87,7 @@ var _ = Describe("BitwardenSecretReconciler", Ordered, func() {
 		bwSecretsResponse sdk.SecretsSyncResponse
 		reconciler        controller.BitwardenSecretReconciler
 		secretMap         []operatorsv1.SecretMap
+		namespace         string
 	)
 
 	// SetupDefaultCtrlMocks configures the mocked Bitwarden Client factory.

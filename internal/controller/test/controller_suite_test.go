@@ -23,7 +23,16 @@ import (
 	operatorsv1 "github.com/bitwarden/sm-kubernetes/api/v1"
 )
 
+var cfg *rest.Config
+var k8sClient client.Client
+var testEnv *envtest.Environment
+var statePath string
+var refreshInterval int
+
+// var fixture *testutils.TestFixture
+
 func TestBitwardenSecretsController(t *testing.T) {
+	// fixture = testutils.NewTestFixture(t)
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "Bitwarden Secrets Controller Suite")
 }
@@ -49,12 +58,6 @@ func findProjectRoot() (string, error) {
 		dir = parent
 	}
 }
-
-var cfg *rest.Config
-var k8sClient client.Client
-var testEnv *envtest.Environment
-var statePath string
-var refreshInterval int
 
 var _ = BeforeSuite(func() {
 	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
