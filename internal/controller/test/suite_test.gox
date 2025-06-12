@@ -51,7 +51,7 @@ import (
 
 	sdk "github.com/bitwarden/sdk-go"
 	operatorsv1 "github.com/bitwarden/sm-kubernetes/api/v1"
-	controller_test_mocks "github.com/bitwarden/sm-kubernetes/internal/controller/test_mocks"
+	controller_test_mocks "github.com/bitwarden/sm-kubernetes/internal/controller/tests/mocks"
 	ctrl "sigs.k8s.io/controller-runtime"
 	//+kubebuilder:scaffold:imports
 )
@@ -140,7 +140,7 @@ var _ = Describe("Bitwarden Secrets Controller", Ordered, func() {
 	authSecretKey := "token-key"
 	name := "bw-secret"
 	secretName := "bitwarden-k8s-secret-sample"
-	count := 10
+	expectedNumOfSecrets := 10
 	timeout := time.Second * 10
 	interval := time.Millisecond * 250
 
@@ -214,7 +214,7 @@ var _ = Describe("Bitwarden Secrets Controller", Ordered, func() {
 
 		secretsData := []sdk.SecretResponse{}
 
-		for i := 0; i < count; i++ {
+		for i := 0; i < expectedNumOfSecrets; i++ {
 			identifier := sdk.SecretIdentifierResponse{
 				ID:             uuid.NewString(),
 				Key:            uuid.NewString(),
@@ -347,8 +347,8 @@ var _ = Describe("Bitwarden Secrets Controller", Ordered, func() {
 				timeVar.UTC().Minute() == minute
 		}))
 
-		Expect(len(k8sSecret.Data)).Should(Equal(count))
-		for i := 0; i < count; i++ {
+		Expect(len(k8sSecret.Data)).Should(Equal(expectedNumOfSecrets))
+		for i := 0; i < expectedNumOfSecrets; i++ {
 			id := bwSecretsResponse.Secrets[i].ID
 			value := bwSecretsResponse.Secrets[i].Value
 			Expect(string(k8sSecret.Data[id])).Should(Equal(value))
@@ -476,8 +476,8 @@ var _ = Describe("Bitwarden Secrets Controller", Ordered, func() {
 			return true
 		}))
 
-		Expect(len(k8sSecret.Data)).Should(Equal(count))
-		for i := 0; i < count; i++ {
+		Expect(len(k8sSecret.Data)).Should(Equal(expectedNumOfSecrets))
+		for i := 0; i < expectedNumOfSecrets; i++ {
 			var id string
 			if i < 3 {
 				id = customMapping[i].SecretKeyName

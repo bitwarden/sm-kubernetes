@@ -80,8 +80,8 @@ func (r *BitwardenSecretReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 
 		//Error was due to missing item
 		if errors.IsNotFound(err) {
-			logger.Info(fmt.Sprintf("%s/%s was deleted.", req.Namespace, req.Name))
-			return ctrl.Result{}, nil
+			logger.Info(fmt.Sprintf("%s/%s was deleted.", req.NamespacedName.Namespace, req.Name))
+			return ctrl.Result{}, err
 		}
 
 		logErr := r.LogError(logger, ctx, bwSecret, err, "Error looking up BitwardenSecret")
@@ -97,17 +97,17 @@ func (r *BitwardenSecretReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		return ctrl.Result{}, nil
 	}
 
-	message := fmt.Sprintf("Syncing  %s/%s", req.Namespace, req.Name)
+	message := fmt.Sprintf("Syncing  %s/%s", req.NamespacedName.Namespace, req.Name)
 	logger.Info(message)
 
 	//Need to retrieve the Bitwarden authorization token
 	authK8sSecret := &corev1.Secret{}
 	namespacedAuthK8sSecret := types.NamespacedName{
 		Name:      bwSecret.Spec.AuthToken.SecretName,
-		Namespace: req.Namespace,
+		Namespace: req.NamespacedName.Namespace,
 	}
 
-	err = r.Client.Get(ctx, namespacedAuthK8sSecret, authK8sSecret)
+	err = r.Get(ctx, namespacedAuthK8sSecret, authK8sSecret)
 
 	if err != nil {
 		logErr := r.LogError(logger, ctx, bwSecret, err, "Error pulling authorization token secret")
@@ -119,7 +119,7 @@ func (r *BitwardenSecretReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 
 	data, ok := authK8sSecret.Data[bwSecret.Spec.AuthToken.SecretKey]
 	if !ok || authK8sSecret.Data == nil {
-		err := fmt.Errorf("auth token secret key %s not found in %s/%s", bwSecret.Spec.AuthToken.SecretKey, req.Namespace, bwSecret.Spec.AuthToken.SecretName)
+		err := fmt.Errorf("auth token secret key %s not found in %s/%s", bwSecret.Spec.AuthToken.SecretKey, req.NamespacedName.Namespace, bwSecret.Spec.AuthToken.SecretName)
 		logErr := r.LogError(logger, ctx, bwSecret, err, "Invalid authorization token secret")
 		return ctrl.Result{RequeueAfter: time.Duration(r.RefreshIntervalSeconds) * time.Second}, logErr
 	}
@@ -144,7 +144,7 @@ func (r *BitwardenSecretReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 
 		namespacedK8sSecret := types.NamespacedName{
 			Name:      bwSecret.Spec.SecretName,
-			Namespace: req.Namespace,
+			Namespace: req.NamespacedName.Namespace,
 		}
 
 		err = r.Get(ctx, namespacedK8sSecret, k8sSecret)
@@ -168,31 +168,42 @@ func (r *BitwardenSecretReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 					RequeueAfter: time.Duration(r.RefreshIntervalSeconds) * time.Second,
 				}, logError
 			}
+
+			r.Get(ctx, namespacedK8sSecret, k8sSecret) //Ensuring we have the latest version of the object.
+
 		}
+
+		secretDeepCopy := k8sSecret.DeepCopy() //Need a copy of the original
+
+		if k8sSecret.ObjectMeta.Labels == nil {
+			k8sSecret.ObjectMeta.Labels = map[string]string{}
+		}
+		k8sSecret.ObjectMeta.Labels[LabelBwSecret] = string(bwSecret.UID)
 
 		ApplySecretMap(secrets, bwSecret, k8sSecret)
 
 		err = SetK8sSecretAnnotations(bwSecret, k8sSecret)
 
 		if err != nil {
-			r.LogWarning(logger, ctx, bwSecret, err, fmt.Sprintf("Error setting annotations for  %s/%s", req.Namespace, req.Name)) //Annotation failure is not critical.  Log, but don't fail the process
+			r.LogWarning(logger, ctx, bwSecret, err, fmt.Sprintf("Error setting annotations for  %s/%s", req.NamespacedName.Namespace, req.Name)) //Annotation failure is not critical.  Log, but don't fail the process
 		}
 
-		err = r.Patch(ctx, k8sSecret, client.MergeFrom(k8sSecret.DeepCopy()))
+		secretPatch := client.MergeFrom(secretDeepCopy)
+		err = r.Patch(ctx, k8sSecret, secretPatch)
 		if err != nil {
-			logError := r.LogError(logger, ctx, bwSecret, err, fmt.Sprintf("Failed to update  %s/%s", req.Namespace, req.Name))
+			logError := r.LogError(logger, ctx, bwSecret, err, fmt.Sprintf("Failed to update  %s/%s", req.NamespacedName.Namespace, req.Name))
 			return ctrl.Result{
 				RequeueAfter: time.Duration(r.RefreshIntervalSeconds) * time.Second,
 			}, logError
 		}
 
-		if logError := r.LogCompletion(logger, ctx, bwSecret, fmt.Sprintf("Completed sync for %s/%s", req.Namespace, req.Name)); logError != nil {
+		if logError := r.LogCompletion(logger, ctx, bwSecret, fmt.Sprintf("Completed sync for %s/%s", req.NamespacedName.Namespace, req.Name)); logError != nil {
 			return ctrl.Result{
 				RequeueAfter: time.Duration(r.RefreshIntervalSeconds) * time.Second,
 			}, logError
 		}
 	} else {
-		logger.Info(fmt.Sprintf("No changes to %s/%s.  Skipping sync.", req.Namespace, req.Name))
+		logger.Info(fmt.Sprintf("No changes to %s/%s.  Skipping sync.", req.NamespacedName.Namespace, req.Name))
 	}
 
 	return ctrl.Result{
@@ -303,14 +314,11 @@ func CreateK8sSecret(bwSecret *operatorsv1.BitwardenSecret) *corev1.Secret {
 		Type: corev1.SecretTypeOpaque,
 		Data: map[string][]byte{},
 	}
-	secret.ObjectMeta.Labels[LabelBwSecret] = string(bwSecret.UID)
 	return secret
 }
 
 func ApplySecretMap(secrets map[string][]byte, bwSecret *operatorsv1.BitwardenSecret, k8sSecret *corev1.Secret) {
-	if k8sSecret.Data == nil {
-		k8sSecret.Data = make(map[string][]byte)
-	}
+	k8sSecret.Data = make(map[string][]byte)
 
 	//If we are doing a straight up synch with no map, dump them across and return
 	if !bwSecret.Spec.OnlyMappedSecrets && len(bwSecret.Spec.SecretMap) == 0 {
@@ -349,6 +357,10 @@ func FindSecretMapByBwSecretId(spec *operatorsv1.BitwardenSecretSpec, bwSecretId
 }
 
 func SetK8sSecretAnnotations(bwSecret *operatorsv1.BitwardenSecret, secret *corev1.Secret) error {
+	if secret.ObjectMeta.Annotations == nil {
+		secret.ObjectMeta.Annotations = make(map[string]string)
+	}
+
 	secret.ObjectMeta.Annotations[AnnotationSyncTime] = time.Now().UTC().Format(time.RFC3339Nano)
 
 	if bwSecret.Spec.SecretMap == nil {
