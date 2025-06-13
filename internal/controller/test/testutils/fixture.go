@@ -12,6 +12,7 @@ import (
 	"go.uber.org/mock/gomock"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -42,7 +43,12 @@ type TestFixture struct {
 	Namespace       string
 	StatePath       string
 	RefreshInterval int
+	SecretMap       []operatorsv1.SecretMap
 }
+
+var (
+	bwSecretsResponse sdk.SecretsSyncResponse
+)
 
 func NewTestFixture(t *testing.T, runner *EnvTestRunner) *TestFixture {
 	gomega.RegisterFailHandler(ginkgo.Fail)
@@ -69,34 +75,42 @@ func (f *TestFixture) setup(t *testing.T, runner *EnvTestRunner) {
 	f.OrgId = uuid.New().String()
 	logf.SetLogger(zap.New(zap.WriteTo(ginkgo.GinkgoWriter), zap.UseDevMode(true)))
 
+	secretsData := []sdk.SecretResponse{}
+	f.SecretMap = []operatorsv1.SecretMap{}
+	for secretCount := range ExpectedNumOfSecrets {
+		identifier := sdk.SecretIdentifierResponse{
+			ID:  uuid.NewString(),
+			Key: uuid.NewString(),
+		}
+
+		//build a map mapping each Identifier to an human readable name based on index
+		f.SecretMap = append(f.SecretMap, operatorsv1.SecretMap{BwSecretId: identifier.ID, SecretKeyName: fmt.Sprintf("secret_%d_key", secretCount)})
+
+		projectId := uuid.NewString()
+
+		secretsData = append(secretsData, sdk.SecretResponse{
+			CreationDate:   time.Now().String(),
+			ID:             identifier.ID,
+			Key:            identifier.Key,
+			Note:           uuid.NewString(),
+			OrganizationID: f.OrgId,
+			ProjectID:      &projectId,
+			RevisionDate:   time.Now().String(),
+			Value:          uuid.NewString(),
+		})
+	}
+
+	bwSecretsResponse = sdk.SecretsSyncResponse{
+		HasChanges: true,
+		Secrets:    secretsData,
+	}
+
 	f.Cfg = runner.Config
 	f.K8sClient = runner.Client
 	f.TestEnv = runner.Environment
 
-	// Setup manager
-	// k8sManager, err := ctrl.NewManager(f.Cfg, ctrl.Options{Scheme: scheme.Scheme})
-	// gomega.Expect(err).NotTo(gomega.HaveOccurred())
-
 	// Setup context
 	f.Ctx, f.Cancel = context.WithCancel(context.TODO())
-
-	// // Wait for cache sync
-	// gomega.Eventually(func() bool {
-	// 	//return k8sManager.GetCache().WaitForCacheSync(f.Ctx)
-	// 	ginkgo.GinkgoWriter.Printf("Waiting for Cache sync check")
-	// 	synced := k8sManager.GetCache().WaitForCacheSync(f.Ctx)
-	// 	ginkgo.GinkgoWriter.Printf("Cache sync check: synced=%v, time=%v\n", synced)
-	// 	return synced
-	// }, 10*time.Second, 100*time.Millisecond).Should(gomega.BeTrue(), "manager cache failed to sync")
-
-	// Initialize reconciler
-	// f.Reconciler = controller.BitwardenSecretReconciler{
-	// 	Client:                  k8sManager.GetClient(),
-	// 	Scheme:                  k8sManager.GetScheme(),
-	// 	RefreshIntervalSeconds:  f.RefreshInterval,
-	// 	StatePath:               f.StatePath,
-	// 	SetK8sSecretAnnotations: controller.SetK8sSecretAnnotations,
-	// }
 
 	f.Reconciler = controller.BitwardenSecretReconciler{
 		Client:                  runner.Client,
@@ -129,10 +143,7 @@ func (f *TestFixture) SetupDefaultCtrlMocks(failing bool, syncResponse *sdk.Secr
 
 	response := syncResponse
 	if response == nil {
-		response = &sdk.SecretsSyncResponse{
-			HasChanges: true,
-			Secrets:    []sdk.SecretResponse{},
-		}
+		response = &bwSecretsResponse
 	}
 
 	if failing {
@@ -191,6 +202,15 @@ func (f *TestFixture) CreateAuthSecret(name, namespace, key, value string) (*cor
 	if err != nil {
 		return nil, err
 	}
+
+	// Wait for the secret to be available in the cache
+	gomega.Eventually(func(g gomega.Gomega) {
+		fetched := &corev1.Secret{}
+		err := f.K8sClient.Get(f.Ctx, types.NamespacedName{Name: name, Namespace: namespace}, fetched)
+		g.Expect(err).NotTo(gomega.HaveOccurred())
+		g.Expect(fetched.Name).To(gomega.Equal(name))
+	}).WithTimeout(10 * time.Second).WithPolling(100 * time.Millisecond).Should(gomega.Succeed())
+
 	return secret, nil
 }
 
@@ -219,6 +239,15 @@ func (f *TestFixture) CreateBitwardenSecret(name, namespace, orgID, secretName, 
 	if err != nil {
 		return nil, err
 	}
+
+	// Wait for the secret to be available in the cache
+	gomega.Eventually(func(g gomega.Gomega) {
+		fetched := &operatorsv1.BitwardenSecret{}
+		err := f.K8sClient.Get(f.Ctx, types.NamespacedName{Name: name, Namespace: namespace}, fetched)
+		g.Expect(err).NotTo(gomega.HaveOccurred())
+		g.Expect(fetched.Name).To(gomega.Equal(name))
+	}).WithTimeout(10 * time.Second).WithPolling(100 * time.Millisecond).Should(gomega.Succeed())
+
 	return bwSecret, nil
 }
 
@@ -244,6 +273,15 @@ func (f *TestFixture) CreateSynchronizedSecret(name string, namespace string, da
 	if err != nil {
 		return nil, err
 	}
+
+	// Wait for the secret to be available in the cache
+	gomega.Eventually(func(g gomega.Gomega) {
+		fetched := &corev1.Secret{}
+		err := f.K8sClient.Get(f.Ctx, types.NamespacedName{Name: name, Namespace: namespace}, fetched)
+		g.Expect(err).NotTo(gomega.HaveOccurred())
+		g.Expect(fetched.Name).To(gomega.Equal(name))
+	}).WithTimeout(10 * time.Second).WithPolling(100 * time.Millisecond).Should(gomega.Succeed())
+
 	return secret, nil
 }
 func (f *TestFixture) CreateNamespace() string {
@@ -254,19 +292,6 @@ func (f *TestFixture) CreateNamespace() string {
 	gomega.Expect(f.K8sClient.Create(f.Ctx, &ns)).Should(gomega.Succeed())
 	return f.Namespace
 }
-
-// func (f *TestFixture) Teardown() {
-// 	if f.Namespace != "" {
-// 		ns := corev1.Namespace{}
-// 		nsName := types.NamespacedName{Name: f.Namespace}
-// 		if err := f.K8sClient.Get(f.Ctx, nsName, &ns); err == nil {
-// 			gomega.Expect(f.K8sClient.Delete(f.Ctx, &ns)).Should(gomega.Succeed())
-// 		}
-// 	}
-// 	f.Cancel()
-// 	f.MockCtrl.Finish()
-// 	gomega.Expect(f.TestEnv.Stop()).NotTo(gomega.HaveOccurred())
-// }
 
 // testutils/fixture.go
 func (f *TestFixture) Teardown() {
