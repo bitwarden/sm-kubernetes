@@ -264,7 +264,7 @@ var _ = Describe("BitwardenSecret Reconciler - Failure Mode Tests", Ordered, fun
 		Expect(err).NotTo(HaveOccurred())
 		Expect(bwSecret).NotTo(BeNil())
 
-		// Create existing Kubernetes secret
+		// Create existing Kubernetes secret so we can prove it updates correctly
 		existingSecret := &corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      testutils.SynchronizedSecretName,
@@ -277,11 +277,11 @@ var _ = Describe("BitwardenSecret Reconciler - Failure Mode Tests", Ordered, fun
 		Expect(fixture.K8sClient.Create(fixture.Ctx, existingSecret)).Should(Succeed())
 
 		// Mock SetK8sSecretAnnotations to fail by overriding the function
-		originalSetK8sSecretAnnotations := controller.SetK8sSecretAnnotations
-		controller.SetK8sSecretAnnotations = func(bwSecret *operatorsv1.BitwardenSecret, secret *corev1.Secret) error {
+		originalSetK8sSecretAnnotations := fixture.Reconciler.SetK8sSecretAnnotations
+		fixture.Reconciler.SetK8sSecretAnnotations = func(bwSecret *operatorsv1.BitwardenSecret, secret *corev1.Secret) error {
 			return fmt.Errorf("annotation setting failed")
 		}
-		defer func() { controller.SetK8sSecretAnnotations = originalSetK8sSecretAnnotations }()
+		defer func() { fixture.Reconciler.SetK8sSecretAnnotations = originalSetK8sSecretAnnotations }()
 
 		req := reconcile.Request{
 			NamespacedName: types.NamespacedName{

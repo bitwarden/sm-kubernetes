@@ -7,6 +7,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/client-go/kubernetes/scheme"
 
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -17,6 +18,7 @@ import (
 	operatorsv1 "github.com/bitwarden/sm-kubernetes/api/v1"
 	"github.com/bitwarden/sm-kubernetes/internal/controller"
 	"github.com/bitwarden/sm-kubernetes/internal/controller/test/testutils"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	//+kubebuilder:scaffold:imports
 )
@@ -88,18 +90,26 @@ var _ = Describe("BitwardenSecret Reconciler - Success Tests", Ordered, func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(bwSecret).NotTo(BeNil())
 
+		// Create a direct client to bypass cache
+		directClient, err := client.New(fixture.Cfg, client.Options{Scheme: scheme.Scheme})
+		Expect(err).NotTo(HaveOccurred())
+
 		// Update status with LastSuccessfulSyncTime, retrying on conflicts
 		syncTime := time.Now().UTC()
 		Eventually(func(g Gomega) {
-			// Fetch the latest version of bwSecret
+			// Fetch the latest version of bwSecret (use cached client for Get)
 			latestBwSecret := &operatorsv1.BitwardenSecret{}
-			g.Expect(fixture.K8sClient.Get(fixture.Ctx, types.NamespacedName{Name: testutils.BitwardenSecretName, Namespace: namespace}, latestBwSecret)).Should(Succeed())
+			err := fixture.K8sClient.Get(fixture.Ctx, types.NamespacedName{Name: testutils.BitwardenSecretName, Namespace: namespace}, latestBwSecret)
+			GinkgoWriter.Printf("Fetched BitwardenSecret %s/%s, ResourceVersion: %s, err: %v\n", namespace, testutils.BitwardenSecretName, latestBwSecret.ResourceVersion, err)
+			g.Expect(err).Should(Succeed())
 
-			// Update status
+			// Update status using direct client
 			latestBwSecret.Status = operatorsv1.BitwardenSecretStatus{
 				LastSuccessfulSyncTime: metav1.Time{Time: syncTime},
 			}
-			g.Expect(fixture.K8sClient.Status().Update(fixture.Ctx, latestBwSecret)).Should(Succeed())
+			err = directClient.Status().Update(fixture.Ctx, latestBwSecret)
+			GinkgoWriter.Printf("Status update for %s/%s, ResourceVersion: %s, err: %v\n", namespace, testutils.BitwardenSecretName, latestBwSecret.ResourceVersion, err)
+			g.Expect(err).Should(Succeed())
 		}).WithTimeout(10 * time.Second).WithPolling(100 * time.Millisecond).Should(Succeed())
 
 		req := reconcile.Request{NamespacedName: types.NamespacedName{Name: testutils.BitwardenSecretName, Namespace: namespace}}
