@@ -16,6 +16,8 @@ on:
 jobs:
   setup:
     name: Setup
+    permissions:
+      contents: read
     runs-on: ubuntu-22.04
     outputs:
       release_version: ${{ steps.version.outputs.version }}
@@ -51,6 +53,8 @@ jobs:
     if: ${{ github.event.inputs.release_type != 'Dry Run' }}
     runs-on: ubuntu-22.04
     needs: setup
+    permissions:
+      contents: write
     steps:
       - name: Create release
         uses: ncipollo/release-action@2c591bcc8ecdcd2db72b97d6147f871fcd833ba5 # v1.14.0
