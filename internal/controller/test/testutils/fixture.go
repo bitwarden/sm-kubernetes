@@ -4,8 +4,6 @@ package testutils
 import (
 	"context"
 	"fmt"
-	"os"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -14,10 +12,8 @@ import (
 	"go.uber.org/mock/gomock"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
-	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -48,73 +44,63 @@ type TestFixture struct {
 	RefreshInterval int
 }
 
-func NewTestFixture(t *testing.T) *TestFixture {
+func NewTestFixture(t *testing.T, runner *EnvTestRunner) *TestFixture {
 	gomega.RegisterFailHandler(ginkgo.Fail)
 	f := &TestFixture{
 		StatePath:       "bin",
 		RefreshInterval: 300,
 	}
-	f.setup(t)
+	f.setup(t, runner)
 	return f
 }
 
-func (f *TestFixture) setup(t *testing.T) {
+func (f *TestFixture) WithMockK8sClient(t *testing.T, configureMocks func(client *mocks.MockClient, statusWriter *mocks.MockStatusWriter)) *TestFixture {
+	mockCtrl := gomock.NewController(t)
+	mockK8sClient := mocks.NewMockClient(mockCtrl)
+	mockStatusWriter := mocks.NewMockStatusWriter(mockCtrl)
+	mockK8sClient.EXPECT().Status().Return(mockStatusWriter).AnyTimes()
+	configureMocks(mockK8sClient, mockStatusWriter)
+	f.Reconciler.Client = mockK8sClient
+	f.MockCtrl = mockCtrl
+	return f
+}
+
+func (f *TestFixture) setup(t *testing.T, runner *EnvTestRunner) {
 	f.OrgId = uuid.New().String()
 	logf.SetLogger(zap.New(zap.WriteTo(ginkgo.GinkgoWriter), zap.UseDevMode(true)))
 
-	// Find project root
-	rootPath, err := findProjectRoot()
-	gomega.Expect(err).NotTo(gomega.HaveOccurred())
-
-	// Set KUBEBUILDER_ASSETS
-	toolsPath := os.Getenv("KUBEBUILDER_ASSETS")
-	if toolsPath == "" {
-		k8sPath := filepath.Join(rootPath, "bin/k8s")
-		entries, err := os.ReadDir(k8sPath)
-		gomega.Expect(err).NotTo(gomega.HaveOccurred())
-		for _, e := range entries {
-			if e.IsDir() {
-				os.Setenv("KUBEBUILDER_ASSETS", filepath.Join(k8sPath, e.Name()))
-				break
-			}
-		}
-		toolsPath = os.Getenv("KUBEBUILDER_ASSETS")
-		gomega.Expect(toolsPath).NotTo(gomega.BeEmpty(), "KUBEBUILDER_ASSETS not set")
-	}
-
-	// Setup envtest
-	crdPath := filepath.Join(rootPath, "config/crd/bases")
-	f.TestEnv = &envtest.Environment{
-		CRDDirectoryPaths:     []string{crdPath},
-		ErrorIfCRDPathMissing: true,
-	}
-	f.TestEnv.ControlPlane.GetAPIServer().Configure().Set("advertise-address", "127.0.0.1")
-
-	f.Cfg, err = f.TestEnv.Start()
-	gomega.Expect(err).NotTo(gomega.HaveOccurred())
-	gomega.Expect(f.Cfg).NotTo(gomega.BeNil())
-
-	// Setup scheme
-	err = operatorsv1.AddToScheme(scheme.Scheme)
-	gomega.Expect(err).NotTo(gomega.HaveOccurred())
-
-	// Setup client
-	f.K8sClient, err = client.New(f.Cfg, client.Options{Scheme: scheme.Scheme})
-	gomega.Expect(err).NotTo(gomega.HaveOccurred())
-	gomega.Expect(f.K8sClient).NotTo(gomega.BeNil())
-	fmt.Fprintf(ginkgo.GinkgoWriter, "K8sClient initialized: %+v\n", f.K8sClient)
+	f.Cfg = runner.Config
+	f.K8sClient = runner.Client
+	f.TestEnv = runner.Environment
 
 	// Setup manager
-	k8sManager, err := ctrl.NewManager(f.Cfg, ctrl.Options{Scheme: scheme.Scheme})
-	gomega.Expect(err).NotTo(gomega.HaveOccurred())
+	// k8sManager, err := ctrl.NewManager(f.Cfg, ctrl.Options{Scheme: scheme.Scheme})
+	// gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
 	// Setup context
 	f.Ctx, f.Cancel = context.WithCancel(context.TODO())
 
+	// // Wait for cache sync
+	// gomega.Eventually(func() bool {
+	// 	//return k8sManager.GetCache().WaitForCacheSync(f.Ctx)
+	// 	ginkgo.GinkgoWriter.Printf("Waiting for Cache sync check")
+	// 	synced := k8sManager.GetCache().WaitForCacheSync(f.Ctx)
+	// 	ginkgo.GinkgoWriter.Printf("Cache sync check: synced=%v, time=%v\n", synced)
+	// 	return synced
+	// }, 10*time.Second, 100*time.Millisecond).Should(gomega.BeTrue(), "manager cache failed to sync")
+
 	// Initialize reconciler
+	// f.Reconciler = controller.BitwardenSecretReconciler{
+	// 	Client:                  k8sManager.GetClient(),
+	// 	Scheme:                  k8sManager.GetScheme(),
+	// 	RefreshIntervalSeconds:  f.RefreshInterval,
+	// 	StatePath:               f.StatePath,
+	// 	SetK8sSecretAnnotations: controller.SetK8sSecretAnnotations,
+	// }
+
 	f.Reconciler = controller.BitwardenSecretReconciler{
-		Client:                  k8sManager.GetClient(),
-		Scheme:                  k8sManager.GetScheme(),
+		Client:                  runner.Client,
+		Scheme:                  runner.Manager.GetScheme(),
 		RefreshIntervalSeconds:  f.RefreshInterval,
 		StatePath:               f.StatePath,
 		SetK8sSecretAnnotations: controller.SetK8sSecretAnnotations,
@@ -126,16 +112,6 @@ func (f *TestFixture) setup(t *testing.T) {
 	f.MockClient = mocks.NewMockBitwardenClientInterface(f.MockCtrl)
 	f.MockSecrets = mocks.NewMockSecretsInterface(f.MockCtrl)
 	f.Reconciler.BitwardenClientFactory = f.MockFactory
-
-	// Start manager
-	go func() {
-		defer ginkgo.GinkgoRecover()
-		err = k8sManager.Start(f.Ctx)
-		gomega.Expect(err).NotTo(gomega.HaveOccurred())
-	}()
-
-	// Clean namespaces
-	f.cleanNamespaces()
 }
 
 func (f *TestFixture) SetupDefaultCtrlMocks(failing bool, syncResponse *sdk.SecretsSyncResponse) {
@@ -219,10 +195,10 @@ func (f *TestFixture) CreateAuthSecret(name, namespace, key, value string) (*cor
 }
 
 func (f *TestFixture) CreateDefaultBitwardenSecret(namespace string, secretMap []operatorsv1.SecretMap) (*operatorsv1.BitwardenSecret, error) {
-	return f.CreateBitwardenSecret(BitwardenSecretName, namespace, string(f.OrgId), SynchronizedSecretName, AuthSecretName, AuthSecretKey, secretMap)
+	return f.CreateBitwardenSecret(BitwardenSecretName, namespace, string(f.OrgId), SynchronizedSecretName, AuthSecretName, AuthSecretKey, secretMap, true)
 }
 
-func (f *TestFixture) CreateBitwardenSecret(name, namespace, orgID, secretName, authSecretName, authSecretKey string, secretMap []operatorsv1.SecretMap) (*operatorsv1.BitwardenSecret, error) {
+func (f *TestFixture) CreateBitwardenSecret(name, namespace, orgID, secretName, authSecretName, authSecretKey string, secretMap []operatorsv1.SecretMap, onlyMappedSecrets bool) (*operatorsv1.BitwardenSecret, error) {
 	bwSecret := &operatorsv1.BitwardenSecret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
@@ -233,9 +209,10 @@ func (f *TestFixture) CreateBitwardenSecret(name, namespace, orgID, secretName, 
 				SecretName: authSecretName,
 				SecretKey:  authSecretKey,
 			},
-			SecretName:     secretName,
-			OrganizationId: orgID,
-			SecretMap:      secretMap,
+			SecretName:        secretName,
+			OrganizationId:    orgID,
+			SecretMap:         secretMap,
+			OnlyMappedSecrets: onlyMappedSecrets,
 		},
 	}
 	err := f.K8sClient.Create(f.Ctx, bwSecret)
@@ -244,6 +221,7 @@ func (f *TestFixture) CreateBitwardenSecret(name, namespace, orgID, secretName, 
 	}
 	return bwSecret, nil
 }
+
 func (f *TestFixture) CreateDefaultSynchronizedSecret(namespace string, data map[string][]byte) (*corev1.Secret, error) {
 	return f.CreateSynchronizedSecret(SynchronizedSecretName, namespace, data)
 }
@@ -268,21 +246,6 @@ func (f *TestFixture) CreateSynchronizedSecret(name string, namespace string, da
 	}
 	return secret, nil
 }
-
-func (f *TestFixture) CleanDefaultSynchronizedSecret(namespace string) {
-	f.CleanSynchronizedSecret(SynchronizedSecretName, corev1.NamespaceNodeLease)
-}
-
-func (f *TestFixture) CleanSynchronizedSecret(name string, namespace string) {
-	synchronizedSecret := &corev1.Secret{}
-	err := f.K8sClient.Get(f.Ctx, types.NamespacedName{Name: name, Namespace: namespace}, synchronizedSecret)
-	if err == nil {
-		gomega.Expect(f.K8sClient.Delete(f.Ctx, synchronizedSecret)).Should(gomega.Succeed())
-	} else if !errors.IsNotFound(err) {
-		ginkgo.Fail(fmt.Sprintf("Failed to check target secret: %v", err))
-	}
-}
-
 func (f *TestFixture) CreateNamespace() string {
 	f.Namespace = fmt.Sprintf("bitwarden-ns-%s", uuid.NewString())
 	ns := corev1.Namespace{
@@ -292,52 +255,32 @@ func (f *TestFixture) CreateNamespace() string {
 	return f.Namespace
 }
 
-func (f *TestFixture) cleanNamespaces() {
-	protectedNamespaces := map[string]bool{
-		"default":         true,
-		"kube-system":     true,
-		"kube-public":     true,
-		"kube-node-lease": true,
-	}
-	namespaceList := &corev1.NamespaceList{}
-	gomega.Expect(f.K8sClient.List(f.Ctx, namespaceList)).NotTo(gomega.HaveOccurred())
-	for _, ns := range namespaceList.Items {
-		if protectedNamespaces[ns.Name] {
-			continue
-		}
-		err := f.K8sClient.Delete(f.Ctx, &ns)
+// func (f *TestFixture) Teardown() {
+// 	if f.Namespace != "" {
+// 		ns := corev1.Namespace{}
+// 		nsName := types.NamespacedName{Name: f.Namespace}
+// 		if err := f.K8sClient.Get(f.Ctx, nsName, &ns); err == nil {
+// 			gomega.Expect(f.K8sClient.Delete(f.Ctx, &ns)).Should(gomega.Succeed())
+// 		}
+// 	}
+// 	f.Cancel()
+// 	f.MockCtrl.Finish()
+// 	gomega.Expect(f.TestEnv.Stop()).NotTo(gomega.HaveOccurred())
+// }
+
+// testutils/fixture.go
+func (f *TestFixture) Teardown() {
+	if f.Namespace != "" {
+		// Create direct client to bypass cache
+		directClient, err := client.New(f.Cfg, client.Options{Scheme: scheme.Scheme})
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
+
+		ns := corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: f.Namespace}}
+		err = directClient.Delete(f.Ctx, &ns)
 		if err != nil && !errors.IsNotFound(err) {
 			gomega.Expect(err).NotTo(gomega.HaveOccurred())
 		}
 	}
-}
-
-func (f *TestFixture) Teardown() {
-	if f.Namespace != "" {
-		ns := corev1.Namespace{}
-		nsName := types.NamespacedName{Name: f.Namespace}
-		if err := f.K8sClient.Get(f.Ctx, nsName, &ns); err == nil {
-			gomega.Expect(f.K8sClient.Delete(f.Ctx, &ns)).Should(gomega.Succeed())
-		}
-	}
 	f.Cancel()
 	f.MockCtrl.Finish()
-	gomega.Expect(f.TestEnv.Stop()).NotTo(gomega.HaveOccurred())
-}
-
-func findProjectRoot() (string, error) {
-	dir, err := os.Getwd()
-	if err != nil {
-		return "", err
-	}
-	for {
-		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
-			return dir, nil
-		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			return "", fmt.Errorf("could not find project root: go.mod not found")
-		}
-		dir = parent
-	}
 }
