@@ -24,6 +24,7 @@ import (
 	mocks "github.com/bitwarden/sm-kubernetes/internal/controller/test/mocks"
 	"github.com/bitwarden/sm-kubernetes/internal/controller/test/testutils"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	//+kubebuilder:scaffold:imports
 )
@@ -59,9 +60,10 @@ var _ = Describe("BitwardenSecret Reconciler - Failure Mode Tests", Ordered, fun
 
 		// Mock SetControllerReference to fail
 		originalSetControllerReference := ctrl.SetControllerReference
-		ctrl.SetControllerReference = func(owner, controlled metav1.Object, scheme *runtime.Scheme) error {
+		ctrl.SetControllerReference = func(owner, controlled metav1.Object, scheme *runtime.Scheme, opts ...controllerutil.OwnerReferenceOption) error {
 			return fmt.Errorf("controller reference failure")
 		}
+
 		defer func() { ctrl.SetControllerReference = originalSetControllerReference }()
 
 		req := reconcile.Request{NamespacedName: types.NamespacedName{Name: testutils.BitwardenSecretName, Namespace: namespace}}
