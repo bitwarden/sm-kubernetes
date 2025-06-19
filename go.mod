@@ -4,15 +4,15 @@ go 1.21.6
 
 require (
 	github.com/bitwarden/sdk-go v0.1.1
-	github.com/go-logr/logr v1.4.1
+	github.com/go-logr/logr v1.4.3
 	github.com/google/uuid v1.6.0
-	github.com/onsi/ginkgo/v2 v2.17.1
-	github.com/onsi/gomega v1.32.0
-	go.uber.org/mock v0.4.0
-	k8s.io/api v0.29.4
-	k8s.io/apimachinery v0.29.4
-	k8s.io/client-go v0.29.4
-	sigs.k8s.io/controller-runtime v0.16.3
+	github.com/onsi/ginkgo/v2 v2.23.4
+	github.com/onsi/gomega v1.37.0
+	go.uber.org/mock v0.5.2
+	k8s.io/api v0.33.1
+	k8s.io/apimachinery v0.33.2
+	k8s.io/client-go v0.33.1
+	sigs.k8s.io/controller-runtime v0.21.0
 )
 
 require (
