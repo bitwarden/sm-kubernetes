@@ -164,4 +164,21 @@ Unit tests are currently found in the following files:
 
 -   cmd/suite_test.go
 
-To run the unit tests, run `make test` from the root directory of this workspace. To debug the unit tests, click on the file you would like to debug. In the `Run and Debug` tab in Visual Studio Code, change the launch configuration from "Debug" to "Test current file", and then press F5. **NOTE: Using the Visual Studio Code "Testing" tab does not currently work due to VS Code not linking the static binaries correctly.**
+To run the unit tests, run `make test` from the root directory of this workspace. To debug the unit tests, click on the file you would like to debug. In the `Run and Debug` tab in Visual Studio Code, change the launch configuration from "Debug" to "Test current file", and then press F5. 
+
+**NOTE: Using the Visual Studio Code "Testing" tab may not work OOB due to VS Code not linking the static binaries correctly.  The solution is to perform the following tasks***
+
+Update VSCode Settings for Tests:
+
+* Open VSCode settings (Ctrl+, or Cmd+,).
+* Search for go.testFlags.
+* Add the following to the go.testFlags array:
+
+```json
+
+["-ldflags=-extldflags=-lm"]
+
+```
+
+This tells the Go test runner to include the linker flag for all test commands.
+

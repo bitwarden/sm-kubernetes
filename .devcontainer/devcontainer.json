@@ -1,6 +1,6 @@
 {
   "name": "BW k8s Operator",
-  "image": "mcr.microsoft.com/devcontainers/go:1.21",
+  "image": "mcr.microsoft.com/devcontainers/go:1.23",
   "runArgs": ["--network=host"], // needed for kind
   "postCreateCommand": "sudo .devcontainer/postCreateCommand.sh",
   "customizations": {
@@ -22,7 +22,7 @@
     "ghcr.io/meaningful-ooo/devcontainer-features/fish:1": {
       "fisher": true
     },
-    "ghcr.io/devcontainers-contrib/features/kind:1": {}
+    "ghcr.io/devcontainers-extra/features/kind:1": {}
   },
   "secrets": {
   },
@@ -33,7 +33,8 @@
     "BWS_ACCESS_TOKEN": "${localEnv:BWS_ACCESS_TOKEN}",
     "BW_API_URL": "${localEnv:BW_API_URL}",
     "BW_IDENTITY_API_URL": "${localEnv:BW_IDENTITY_API_URL}",
-    "BW_SECRETS_MANAGER_REFRESH_INTERVAL": "${localEnv:BW_SECRETS_MANAGER_REFRESH_INTERVAL}"
+    "BW_SECRETS_MANAGER_REFRESH_INTERVAL": "${localEnv:BW_SECRETS_MANAGER_REFRESH_INTERVAL}",
+    "GOFLAGS": "-ldflags=-extldflags=-lm"
   },
   "remoteUser": "root" // needed for kind: https://github.com/kubernetes-sigs/kind/issues/3196#issuecomment-1537260166
 }
