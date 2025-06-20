@@ -127,7 +127,7 @@ func (r *BitwardenSecretReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	orgId := bwSecret.Spec.OrganizationId
 
 	//Get the secrets from the Bitwarden API based on lastSync and organizationId
-	//This will also indicate if the Bitwarden variable needs to be refreshed
+	//This will also indicate if the Bitwarden secret needs to be refreshed
 	refresh, secrets, err := r.PullSecretManagerSecretDeltas(logger, orgId, authToken, lastSync.Time)
 
 	if err != nil {
@@ -149,7 +149,7 @@ func (r *BitwardenSecretReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 
 		err = r.Get(ctx, namespacedK8sSecret, k8sSecret)
 
-		//Bitwarden secret doesn't exist.  need to create it
+		//Bitwarden secret doesn't exist; need to create it
 		if err != nil && errors.IsNotFound(err) {
 			k8sSecret = CreateK8sSecret(bwSecret)
 
@@ -185,7 +185,7 @@ func (r *BitwardenSecretReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		err = r.SetK8sSecretAnnotations(bwSecret, k8sSecret)
 
 		if err != nil {
-			r.LogWarning(logger, ctx, bwSecret, err, fmt.Sprintf("Error setting annotations for  %s/%s", req.NamespacedName.Namespace, req.Name)) //Annotation failure is not critical.  Log, but don't fail the process
+			r.LogWarning(logger, ctx, bwSecret, err, fmt.Sprintf("Error setting annotations for  %s/%s", req.NamespacedName.Namespace, req.Name)) //Annotation failure is not critical. Log, but don't fail the process
 		}
 
 		secretPatch := client.MergeFrom(secretDeepCopy)
