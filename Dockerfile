@@ -1,4 +1,4 @@
-FROM golang:1.21 as builder
+FROM golang:1.21-alpine3.20 AS builder
 ARG TARGETOS
 ARG TARGETARCH
 
@@ -15,11 +15,11 @@ COPY api/ api/
 COPY internal/controller/ internal/controller/
 COPY Makefile Makefile
 
-RUN apt update && apt install unzip musl-tools -y
+RUN apk add --no-cache unzip musl-dev build-base
 
 RUN mkdir state
 
-RUN CC=musl-gcc CGO_ENABLED=1 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -a -ldflags '-linkmode external -extldflags "-static -Wl,-unresolved-symbols=ignore-all"' -o manager cmd/main.go
+RUN CC=gcc CGO_ENABLED=1 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -a -ldflags '-linkmode external -extldflags "-static -Wl,-unresolved-symbols=ignore-all"' -o manager cmd/main.go
 
 FROM gcr.io/distroless/base-debian12:nonroot
 WORKDIR /
