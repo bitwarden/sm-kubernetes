@@ -2,6 +2,7 @@
 apt-get update
 apt-get install -y kubernetes-client musl-tools # kubectl
 kind delete cluster --name sm-operator && kind create cluster --name sm-operator --config .devcontainer/kind-config.yaml
+go install -mod=mod github.com/onsi/ginkgo/v2/ginkgo@latest
 
 PATH="$PATH:/usr/local/go/bin" make setup
 PATH="$PATH:/usr/local/go/bin" make install
