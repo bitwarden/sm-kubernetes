@@ -45,6 +45,12 @@ type BitwardenSecretSpec struct {
 	// The secret key reference for the authorization token used to connect to Secrets Manager
 	// +kubebuilder:Required
 	AuthToken AuthToken `json:"authToken"`
+	// OnlyMappedSecrets, when true, restricts the Kubernetes Secret to only include secrets specified in SecretMap.
+	// When false or unset, all secrets accessible by the machine account are included, with SecretMap applied for renaming.
+	// Defaults to true.
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:default=true
+	OnlyMappedSecrets bool `json:"onlyMappedSecrets"`
 }
 
 type AuthToken struct {
