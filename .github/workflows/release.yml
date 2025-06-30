@@ -92,7 +92,6 @@ jobs:
           echo "Github Release Option: $_RELEASE_OPTION"
 
       - name: Log in to Azure
-        id: azure-login
         uses: bitwarden/gh-actions/azure-login@main
         with:
           subscription_id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
@@ -167,7 +166,6 @@ jobs:
         run: exit 1
 
       - name: Log in to Azure
-        id: azure-login
         if: failure()
         uses: bitwarden/gh-actions/azure-login@main
         with:
