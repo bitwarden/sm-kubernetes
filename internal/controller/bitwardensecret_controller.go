@@ -102,9 +102,13 @@ func (r *BitwardenSecretReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 
 	//Need to retrieve the Bitwarden authorization token
 	authK8sSecret := &corev1.Secret{}
+	authNamespace := req.NamespacedName.Namespace
+	if bwSecret.Spec.AuthToken.Namespace != "" {
+		authNamespace = bwSecret.Spec.AuthToken.Namespace
+	}
 	namespacedAuthK8sSecret := types.NamespacedName{
 		Name:      bwSecret.Spec.AuthToken.SecretName,
-		Namespace: req.NamespacedName.Namespace,
+		Namespace: authNamespace,
 	}
 
 	err = r.Get(ctx, namespacedAuthK8sSecret, authK8sSecret)
@@ -119,7 +123,7 @@ func (r *BitwardenSecretReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 
 	data, ok := authK8sSecret.Data[bwSecret.Spec.AuthToken.SecretKey]
 	if !ok || authK8sSecret.Data == nil {
-		err := fmt.Errorf("auth token secret key %s not found in %s/%s", bwSecret.Spec.AuthToken.SecretKey, req.NamespacedName.Namespace, bwSecret.Spec.AuthToken.SecretName)
+		err := fmt.Errorf("auth token secret key %s not found in %s/%s", bwSecret.Spec.AuthToken.SecretKey, authNamespace, bwSecret.Spec.AuthToken.SecretName)
 		logErr := r.LogError(logger, ctx, bwSecret, err, "Invalid authorization token secret")
 		return ctrl.Result{RequeueAfter: time.Duration(r.RefreshIntervalSeconds) * time.Second}, logErr
 	}

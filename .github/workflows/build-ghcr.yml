@@ -15,7 +15,7 @@ jobs:
     name: Build Docker images
     runs-on: ubuntu-22.04
     env:
-      _GHCR_REGISTRY: ghcr.io/bitwarden
+      _GHCR_REGISTRY: ghcr.io/${{github.repository_owner}}
       _PROJECT_NAME: sm-operator
 
     steps:

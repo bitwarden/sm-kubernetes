@@ -219,6 +219,10 @@ func (f *TestFixture) CreateDefaultBitwardenSecret(namespace string, secretMap [
 }
 
 func (f *TestFixture) CreateBitwardenSecret(name, namespace, orgID, secretName, authSecretName, authSecretKey string, secretMap []operatorsv1.SecretMap, onlyMappedSecrets bool) (*operatorsv1.BitwardenSecret, error) {
+	return f.CreateBitwardenSecretWithAuthNamespace(name, namespace, orgID, secretName, authSecretName, authSecretKey, "", secretMap, onlyMappedSecrets)
+}
+
+func (f *TestFixture) CreateBitwardenSecretWithAuthNamespace(name, namespace, orgID, secretName, authSecretName, authSecretKey, authNamespace string, secretMap []operatorsv1.SecretMap, onlyMappedSecrets bool) (*operatorsv1.BitwardenSecret, error) {
 	bwSecret := &operatorsv1.BitwardenSecret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
@@ -228,6 +232,7 @@ func (f *TestFixture) CreateBitwardenSecret(name, namespace, orgID, secretName, 
 			AuthToken: operatorsv1.AuthToken{
 				SecretName: authSecretName,
 				SecretKey:  authSecretKey,
+				Namespace:  authNamespace,
 			},
 			SecretName:        secretName,
 			OrganizationId:    orgID,
