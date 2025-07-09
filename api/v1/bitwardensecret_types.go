@@ -60,6 +60,9 @@ type AuthToken struct {
 	// The key of the Kubernetes secret where the authorization token is stored
 	// +kubebuilder:Required
 	SecretKey string `json:"secretKey"`
+	// The namespace where the authorization token secret is stored. If not specified, defaults to the same namespace as the BitwardenSecret
+	// +kubebuilder:Optional
+	Namespace string `json:"namespace,omitempty"`
 }
 
 type SecretMap struct {
