@@ -16,6 +16,8 @@ on:
 jobs:
   setup:
     name: Setup
+    permissions:
+      contents: read
     runs-on: ubuntu-22.04
     outputs:
       release_version: ${{ steps.version.outputs.version }}
@@ -51,6 +53,8 @@ jobs:
     if: ${{ github.event.inputs.release_type != 'Dry Run' }}
     runs-on: ubuntu-22.04
     needs: setup
+    permissions:
+      contents: write
     steps:
       - name: Create release
         uses: ncipollo/release-action@2c591bcc8ecdcd2db72b97d6147f871fcd833ba5 # v1.14.0
@@ -68,6 +72,9 @@ jobs:
     needs:
       - setup
       - release-github
+    permissions:
+      contents: read
+      id-token: write
     env:
       _AZ_REGISTRY: bitwardenprod.azurecr.io
       _PROJECT_NAME: sm-operator
@@ -84,10 +91,12 @@ jobs:
           echo "GitHub event: $GITHUB_EVENT"
           echo "Github Release Option: $_RELEASE_OPTION"
 
-      - name: Login to Azure - Prod Subscription
-        uses: Azure/login@e15b166166a8746d1a47596803bd8c1b595455cf # v1.6.0
+      - name: Log in to Azure
+        uses: bitwarden/gh-actions/azure-login@main
         with:
-          creds: ${{ secrets.AZURE_PROD_KV_CREDENTIALS }}
+          subscription_id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          tenant_id: ${{ secrets.AZURE_TENANT_ID }}
+          client_id: ${{ secrets.AZURE_CLIENT_ID }}
 
       - name: Log in to Azure ACR
         run: az acr login -n ${_AZ_REGISTRY%.azurecr.io}
@@ -96,7 +105,6 @@ jobs:
         id: setup-dct
         uses: bitwarden/gh-actions/setup-docker-trust@main
         with:
-          azure-creds: ${{ secrets.AZURE_KV_CI_SERVICE_PRINCIPAL }}
           azure-keyvault-name: "bitwarden-ci"
 
       - name: Pull image
@@ -137,6 +145,9 @@ jobs:
       - name: Log out of Docker
         run: docker logout
 
+      - name: Log out from Azure
+        uses: bitwarden/gh-actions/azure-logout@main
+
   check-failures:
     name: Check for failures
     if: always()
@@ -145,6 +156,8 @@ jobs:
       - release-docker
       - release-github
       - setup
+    permissions:
+      id-token: write
     steps:
       - name: Check if any job failed
         if: |
@@ -152,11 +165,13 @@ jobs:
           && contains(needs.*.result, 'failure')
         run: exit 1
 
-      - name: Login to Azure - CI subscription
-        uses: Azure/login@e15b166166a8746d1a47596803bd8c1b595455cf # v1.6.0
+      - name: Log in to Azure
         if: failure()
+        uses: bitwarden/gh-actions/azure-login@main
         with:
-          creds: ${{ secrets.AZURE_KV_CI_SERVICE_PRINCIPAL }}
+          subscription_id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          tenant_id: ${{ secrets.AZURE_TENANT_ID }}
+          client_id: ${{ secrets.AZURE_CLIENT_ID }}
 
       - name: Retrieve secrets
         id: retrieve-secrets
@@ -165,6 +180,10 @@ jobs:
         with:
           keyvault: "bitwarden-ci"
           secrets: "devops-alerts-slack-webhook-url"
+
+      - name: Log out from Azure
+        if: failure()
+        uses: bitwarden/gh-actions/azure-logout@main
 
       - name: Notify Slack on failure
         uses: act10ns/slack@44541246747a30eb3102d87f7a4cc5471b0ffb7d # v2.1.0
