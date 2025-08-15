@@ -146,4 +146,41 @@ var _ = Describe("BitwardenSecret Reconciler - Success Tests", Ordered, func() {
 			g.Expect(condition).To(BeNil())
 		})
 	})
+
+	It("should successfully sync with auth token from different namespace", func() {
+		fixture.SetupDefaultCtrlMocks(false, nil)
+
+		// Create auth secret in a different namespace
+		authNamespace := fixture.CreateNamespace()
+		_, err := fixture.CreateDefaultAuthSecret(authNamespace)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Create BitwardenSecret with cross-namespace auth token using fixture method
+		bwSecret, err := fixture.CreateBitwardenSecretWithAuthNamespace(testutils.BitwardenSecretName, namespace, fixture.OrgId, testutils.SynchronizedSecretName, testutils.AuthSecretName, testutils.AuthSecretKey, authNamespace, fixture.SecretMap, true)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(bwSecret).NotTo(BeNil())
+
+		req := reconcile.Request{NamespacedName: types.NamespacedName{Name: testutils.BitwardenSecretName, Namespace: namespace}}
+
+		result, err := fixture.Reconciler.Reconcile(fixture.Ctx, req)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result.RequeueAfter).To(Equal(time.Duration(fixture.Reconciler.RefreshIntervalSeconds) * time.Second))
+
+		Eventually(func(g Gomega) {
+			// Verify created secret in the BitwardenSecret's namespace
+			createdTargetSecret := &corev1.Secret{}
+			g.Expect(fixture.K8sClient.Get(fixture.Ctx, types.NamespacedName{Name: testutils.SynchronizedSecretName, Namespace: namespace}, createdTargetSecret)).Should(Succeed())
+			g.Expect(createdTargetSecret.Labels[controller.LabelBwSecret]).To(Equal(string(bwSecret.UID)))
+			g.Expect(createdTargetSecret.Type).To(Equal(corev1.SecretTypeOpaque))
+			g.Expect(len(createdTargetSecret.Data)).To(Equal(testutils.ExpectedNumOfSecrets))
+
+			// Verify SuccessfulSync condition and LastSuccessfulSyncTime
+			updatedBwSecret := &operatorsv1.BitwardenSecret{}
+			g.Expect(fixture.K8sClient.Get(fixture.Ctx, types.NamespacedName{Name: testutils.BitwardenSecretName, Namespace: namespace}, updatedBwSecret)).Should(Succeed())
+			condition := apimeta.FindStatusCondition(updatedBwSecret.Status.Conditions, "SuccessfulSync")
+			g.Expect(condition).NotTo(BeNil())
+			g.Expect(condition.Status).To(Equal(metav1.ConditionTrue))
+			g.Expect(updatedBwSecret.Status.LastSuccessfulSyncTime.Time).NotTo(BeZero())
+		}).Should(Succeed())
+	})
 })

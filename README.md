@@ -93,7 +93,7 @@ Our operator is designed to look for the creation of a custom resource called a 
 -   **metadata.name**: The name of the BitwardenSecret object you are deploying
 -   **spec.organizationId**: The Bitwarden organization ID you are pulling Secrets Manager data from
 -   **spec.secretName**: The name of the Kubernetes secret that will be created and injected with Secrets Manager data.
--   **spec.authToken**: The name of a secret inside of the Kubernetes namespace that the BitwardenSecrets object is being deployed into that contains the Secrets Manager machine account authorization token being used to access secrets.
+-   **spec.authToken**: Configuration for the Secrets Manager machine account authorization token. By default, looks for the secret in the same namespace as the BitwardenSecret, but can optionally specify a different namespace.
 
 Secrets Manager does not guarantee unique secret names across projects, so by default secrets will be created with the Secrets Manager secret UUID used as the key. To make your generated secret easier to use, you can create a map of Bitwarden Secret IDs to Kubernetes secret keys. The generated secret will replace the Bitwarden Secret IDs with the mapped friendly name you provide. Below are the map settings available:
 
