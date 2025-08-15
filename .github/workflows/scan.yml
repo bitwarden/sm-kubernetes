@@ -14,7 +14,6 @@ on:
 jobs:
   check-run:
     name: Check PR run
-    if: github.repository == 'bitwarden/sm-kubernetes'
     uses: bitwarden/gh-actions/.github/workflows/check-run.yml@main
     permissions:
       contents: read
