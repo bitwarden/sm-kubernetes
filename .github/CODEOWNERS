@@ -11,6 +11,7 @@
 .github/workflows/release.yml @bitwarden/dept-bre
 .github/workflows/release.yml @bitwarden/dept-bre
 
-## Docker files ownership ##
-Dockerfile @bitwarden/dept-bre
-.dockerignore @bitwarden/dept-bre
+## Dockerfile shared ownership
+**/Dockerfile @bitwarden/dept-bre @bitwarden/team-appsec
+**/.dockerignore @bitwarden/dept-bre @bitwarden/team-appsec
+**/entrypoint.sh @bitwarden/dept-bre @bitwarden/team-appsec
