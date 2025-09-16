@@ -94,7 +94,7 @@ jobs:
           PR_BRANCH: "${{ steps.setup.outputs.branch_name }}"
           GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
           BASE_BRANCH: main
-          TITLE: "Bump version to $_VERSION_NUMBER"
+          TITLE: "Bump version to ${{ env._VERSION_NUMBER }}"
         run: |
           gh pr create --title "$TITLE" \
             --base "$BASE" \
@@ -108,4 +108,4 @@ jobs:
               - [X] Other
 
               ## Objective
-              Automated version bump to ${{ github.event.inputs.version_number }}"
+              Automated version bump to $_VERSION_NUMBER"
