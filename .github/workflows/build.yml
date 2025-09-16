@@ -80,8 +80,9 @@ jobs:
         uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
         with:
           file: Dockerfile
-          platforms: ${{ github.ref == 'refs/heads/main' && 'linux/amd64,linux/arm64' || 'linux/amd64' }} # Cannot build multi-arch without pushing and then scan and test
+          platforms: 'linux/amd64,linux/arm64'
           push: ${{ github.ref == 'refs/heads/main' }}
+          load: ${{ github.ref != 'refs/heads/main' }}
           tags: ${{ steps.image-tags.outputs.tags }}
 
       - name: Install Cosign
