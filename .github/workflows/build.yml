@@ -135,6 +135,7 @@ jobs:
         env:
           IMAGE: ${{ steps.image-tags.outputs.primary_tag }}
         run: |
+          kind load docker-image $IMAGE
           make deploy IMG=$IMAGE
 
           count=0
