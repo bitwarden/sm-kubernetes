@@ -68,6 +68,7 @@ jobs:
       - setup
       - release
     env:
+      _MAIN_TAG: dev
       _RELEASE_TAG: ${{ needs.setup.outputs.release_version }}
       _IMAGE_NAME: ghcr.io/bitwarden/sm-operator
     permissions:
@@ -81,18 +82,15 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Dry Run - Pull, tag, and push release
-        if: ${{ inputs.release_type == 'Dry Run' }}
+      - name: Tag release
         run: |
-          docker pull ${{ env._IMAGE_NAME }}:dev
-          docker tag ${{ env._IMAGE_NAME }}:dev ${{ env._IMAGE_NAME }}:${{ env._RELEASE_TAG }}
+          docker pull "$_IMAGE_NAME:$_MAIN_TAG"
+          docker tag "$_IMAGE_NAME:$_MAIN_TAG" "$_IMAGE_NAME:$_RELEASE_TAG"
 
-      - name: Pull, tag, and push release
+      - name: Push release
         if: ${{ inputs.release_type != 'Dry Run' }}
         run: |
-          docker pull ${{ env._IMAGE_NAME }}:dev
-          docker tag ${{ env._IMAGE_NAME }}:dev ${{ env._IMAGE_NAME }}:${{ env._RELEASE_TAG }}
-          docker push ${{ env._IMAGE_NAME }}:${{ env._RELEASE_TAG }}
+          docker push "$_IMAGE_NAME:$_RELEASE_TAG"
 
       - name: Log out of Docker
         run: docker logout ghcr.io

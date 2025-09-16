@@ -166,3 +166,6 @@ jobs:
         run: |
           make undeploy
           kind delete cluster
+
+      - name: Log out of Docker
+        run: docker logout ghcr.io
