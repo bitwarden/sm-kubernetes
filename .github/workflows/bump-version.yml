@@ -55,7 +55,7 @@ jobs:
           git_commit_gpgsign: true
 
       - name: Create branch
-        run: git switch -c version_bump_$VERSION_NUMBER
+        run: git switch -c "version_bump_$_VERSION_NUMBER"
 
       - name: Bump version
         run: |
@@ -71,6 +71,7 @@ jobs:
         run: |
           if [ -n "$(git status --porcelain)" ]; then
             echo "changes_to_commit=TRUE" >> $GITHUB_OUTPUT
+            git diff
           else
             echo "changes_to_commit=FALSE" >> $GITHUB_OUTPUT
             echo "No changes to commit!";
