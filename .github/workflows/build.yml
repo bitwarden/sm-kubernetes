@@ -130,12 +130,18 @@ jobs:
       - name: Create kind cluster
         uses: helm/kind-action@0025e74a8c7512023d06dc019c617aa3cf561fde # v1.10.0
 
+      - name: Load image into kind
+        if: ${{ github.ref != 'refs/heads/main' }}
+        env:
+          IMAGE: ${{ steps.image-tags.outputs.primary_tag }}
+        run: |
+          kind load docker-image "$IMAGE" --name "$(kind get clusters)"
+
       - name: Smoke test image
         id: smoke-test
         env:
           IMAGE: ${{ steps.image-tags.outputs.primary_tag }}
         run: |
-          kind load docker-image $IMAGE --name "$(kind get clusters)"
           make deploy IMG=$IMAGE
 
           count=0
