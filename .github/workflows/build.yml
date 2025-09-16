@@ -1,17 +1,21 @@
-name: Build
+name: Build for GitHub Container Registry
 
 on:
+  push:
+    branches:
+      - "main"
   workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
 
 jobs:
   build-docker:
     name: Build Docker images
     runs-on: ubuntu-22.04
-    permissions:
-      contents: read
-      id-token: write
     env:
-      _AZ_REGISTRY: bitwardenprod.azurecr.io
+      _GHCR_REGISTRY: ghcr.io/bitwarden
       _PROJECT_NAME: sm-operator
 
     steps:
@@ -24,15 +28,12 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3.11.1
 
-      - name: Log in to Azure
-        uses: bitwarden/gh-actions/azure-login@main
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@9780b0c442fbb1117ed29e0efdff1e18412f7567 # v3.3.0
         with:
-          subscription_id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-          tenant_id: ${{ secrets.AZURE_TENANT_ID }}
-          client_id: ${{ secrets.AZURE_CLIENT_ID }}
-
-      - name: Log in to ACR
-        run: az acr login -n ${_AZ_REGISTRY%.azurecr.io}
+          registry: ghcr.io
+          username: ${{github.actor}}
+          password: ${{secrets.GITHUB_TOKEN}}
 
       - name: Test operator
         id: test
@@ -57,7 +58,7 @@ jobs:
         id: image-name
         env:
           IMAGE_TAG: ${{ steps.tag.outputs.image_tag }}
-        run: echo "name=${_AZ_REGISTRY}/${_PROJECT_NAME}:${IMAGE_TAG}" >> $GITHUB_OUTPUT
+        run: echo "name=${_GHCR_REGISTRY}/${_PROJECT_NAME}:${IMAGE_TAG}" >> $GITHUB_OUTPUT
 
       - name: Build Docker image
         uses: docker/build-push-action@4f58ea79222b3b9dc2c8bbdd6debcef730109a75 # v6.9.0
@@ -76,11 +77,6 @@ jobs:
           IMAGE: ${{ steps.image-name.outputs.name }}
         run: |
           make deploy IMG=$IMAGE
-
-          #Setup image pull secret (Until repo is made public)
-          kubectl create secret -n sm-operator-system docker-registry ghcr-login-secret --docker-server=ghcr.io --docker-username=bitwarden-devops-bot --docker-password=${{ secrets.GITHUB_TOKEN }} --docker-email=106330231+bitwarden-devops-bot@users.noreply.github.com
-
-          kubectl patch deployment sm-operator-controller-manager -n sm-operator-system --patch-file "$GITHUB_WORKSPACE/.github/workflows/test_files/deployment-patch.yaml"
 
           count=0
           while [[ $(kubectl get pods -n sm-operator-system -l control-plane=controller-manager -o jsonpath="{.items[*].status.containerStatuses[*].ready}") != "true" ]]; do
@@ -110,6 +106,3 @@ jobs:
         run: |
           make undeploy
           kind delete cluster
-
-      - name: Log out from Azure
-        uses: bitwarden/gh-actions/azure-logout@main
