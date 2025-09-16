@@ -19,12 +19,14 @@ jobs:
       _VERSION_NUMBER: ${{ inputs.version_number }}
 
     steps:
-      - name: Validate version format
+      - name: Setup and validate version number
+        id: setup
         run: |
           if ! [[ "$_VERSION_NUMBER" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "Error: Version number ($_VERSION_NUMBER) is not in semantic version format (X.Y.Z)"
             exit 1
           fi
+          branch_name="version_bump_$_VERSION_NUMBER"
 
       - name: Check out repo
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
@@ -55,7 +57,7 @@ jobs:
           git_commit_gpgsign: true
 
       - name: Create branch
-        run: git switch -c "version_bump_$_VERSION_NUMBER"
+        run: git switch -c "${{ steps.setup.outputs.branch_name }}"
 
       - name: Bump version
         run: |
@@ -83,13 +85,13 @@ jobs:
 
       - name: Push changes
         if: ${{ steps.version-changed.outputs.changes_to_commit == 'TRUE' }}
-        run: git push -u origin "version_bump_$_VERSION_NUMBER"
+        run: git push -u origin "${{ steps.setup.outputs.branch_name }}"
 
       - name: Create version PR
         if: ${{ steps.version-changed.outputs.changes_to_commit == 'TRUE' }}
         id: create-pr
         env:
-          PR_BRANCH: "version_bump_$_VERSION_NUMBER"
+          PR_BRANCH: "${{ steps.setup.outputs.branch_name }}"
           GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
           BASE_BRANCH: main
           TITLE: "Bump version to $_VERSION_NUMBER"
