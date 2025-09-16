@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       version_number:
-        description: "New version number"
+        description: "New version number (Ex 1.2.3)"
         required: true
 
 jobs:
@@ -16,7 +16,7 @@ jobs:
       pull-requests: write
       id-token: write
     env:
-      _VERSION_NUMBER: ${{ github.event.inputs.version_number }}
+      _VERSION_NUMBER: ${{ inputs.version_number }}
 
     steps:
       - name: Validate version format
@@ -55,11 +55,11 @@ jobs:
           git_commit_gpgsign: true
 
       - name: Create branch
-        run: git switch -c version_bump_${{ github.event.inputs.version_number }}
+        run: git switch -c version_bump_$VERSION_NUMBER
 
       - name: Bump version
         run: |
-          sed -i -E '/^VERSION\s+\?=\s+[^\s]+/!b;cVERSION ?= ${{ github.event.inputs.version_number }}' Makefile
+          sed -i "s/^VERSION ?= .*/VERSION ?= $_VERSION_NUMBER/" Makefile
 
       - name: Set up Git
         run: |
@@ -78,26 +78,24 @@ jobs:
 
       - name: Commit files
         if: ${{ steps.version-changed.outputs.changes_to_commit == 'TRUE' }}
-        run: git commit -m "Bumped version to ${{ github.event.inputs.version_number }}" -a
+        run: git commit -m "Bumped version to $_VERSION_NUMBER" -a
 
       - name: Push changes
         if: ${{ steps.version-changed.outputs.changes_to_commit == 'TRUE' }}
-        run: git push -u origin version_bump_${{ github.event.inputs.version_number }}
+        run: git push -u origin "version_bump_$_VERSION_NUMBER"
 
       - name: Create version PR
         if: ${{ steps.version-changed.outputs.changes_to_commit == 'TRUE' }}
         id: create-pr
         env:
-          PR_BRANCH: "version_bump_${{ github.event.inputs.version_number }}"
+          PR_BRANCH: "version_bump_$_VERSION_NUMBER"
           GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
           BASE_BRANCH: main
-          TITLE: "Bump version to ${{ github.event.inputs.version_number }}"
+          TITLE: "Bump version to $_VERSION_NUMBER"
         run: |
           gh pr create --title "$TITLE" \
             --base "$BASE" \
             --head "$PR_BRANCH" \
-            --label "version update" \
-            --label "automated pr" \
             --body "
               ## Type of change
               - [ ] Bug fix
