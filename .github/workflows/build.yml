@@ -80,14 +80,17 @@ jobs:
         uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
         with:
           file: Dockerfile
-          platforms: 'linux/amd64,linux/arm64'
-          push: true
+          platforms: ${{ github.ref == 'refs/heads/main' && 'linux/amd64,linux/arm64' || 'linux/amd64' }} # Can only do single arch when not pushing to support scan and testing locally
+          push: ${{ github.ref == 'refs/heads/main' }}
+          load: ${{ github.ref != 'refs/heads/main' }}
           tags: ${{ steps.image-tags.outputs.tags }}
 
       - name: Install Cosign
+        if: ${{ github.ref == 'refs/heads/main' }}
         uses: sigstore/cosign-installer@d58896d6a1865668819e1d91763c7751a165e159 # v3.9.2
 
       - name: Sign image with Cosign
+        if: ${{ github.ref == 'refs/heads/main' }}
         id: cosign
         env:
           DIGEST: ${{ steps.build-docker.outputs.digest }}
@@ -102,6 +105,7 @@ jobs:
           echo "images=${images}" >> $GITHUB_OUTPUT
 
       - name: Verify the signed image with Cosign
+        if: ${{ github.ref == 'refs/heads/main' }}
         run: |
           cosign verify \
             --certificate-identity "${{ github.server_url }}/${{ github.workflow_ref }}" \
