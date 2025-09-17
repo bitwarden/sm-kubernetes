@@ -14,7 +14,7 @@ on:
         type: boolean
 
 env:
-  _PUSH_IMAGE: ${{ (github.event.inputs.push_image == 'true' || github.ref == 'refs/heads/main') && 'true' || 'false' }}
+  _PUSH_IMAGE: ${{ (inputs.push_image == 'true' || github.ref == 'refs/heads/main') && 'true' || 'false' }}
 
 jobs:
   build-and-test:
