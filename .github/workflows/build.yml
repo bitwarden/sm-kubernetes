@@ -1,4 +1,4 @@
-name: Build and Test
+name: Build and test
 
 on:
   pull_request:
@@ -9,7 +9,7 @@ on:
 
 jobs:
   build-and-test:
-    name: Build Image And Test
+    name: Build image and test
     runs-on: ubuntu-24.04
     permissions:
       contents: read
