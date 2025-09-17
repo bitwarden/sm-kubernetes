@@ -8,13 +8,13 @@ on:
   workflow_dispatch:
     inputs:
       push_image:
-        description: "Push image to GitHub Container Registry"
+        description: "Push image to GitHub Container Registry (Always true on main)"
         required: false
         default: false
         type: boolean
 
 env:
-  _PUSH_IMAGE: ${{ (inputs.push_image == 'true' || github.ref == 'refs/heads/main') && 'true' || 'false' }}
+  _PUSH_IMAGE: ${{ (inputs.push_image == true || github.ref == 'refs/heads/main') && 'true' || 'false' }}
 
 jobs:
   build-and-test:
