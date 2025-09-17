@@ -6,6 +6,15 @@ on:
     branches:
       - "main"
   workflow_dispatch:
+    inputs:
+      push_image:
+        description: "Push image to GitHub Container Registry"
+        required: false
+        default: false
+        type: boolean
+
+env:
+  push_image: ${{ (github.event.inputs.push_image == 'true' || github.ref == 'refs/heads/main') && 'true' || 'false' }}
 
 jobs:
   build-and-test:
@@ -80,17 +89,17 @@ jobs:
         uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
         with:
           file: Dockerfile
-          platforms: ${{ github.ref == 'refs/heads/main' && 'linux/amd64,linux/arm64' || 'linux/amd64' }} # Can only do single arch when not pushing to support scan and testing locally
-          push: ${{ github.ref == 'refs/heads/main' }}
-          load: ${{ github.ref != 'refs/heads/main' }}
+          platforms: ${{ env.push_image == 'true' && 'linux/amd64,linux/arm64' || 'linux/amd64' }} # Can only do single arch when not pushing to support scan and testing locally
+          push: ${{ env.push_image == 'true' }}
+          load: ${{ env.push_image != 'true' }}
           tags: ${{ steps.image-tags.outputs.tags }}
 
       - name: Install Cosign
-        if: ${{ github.ref == 'refs/heads/main' }}
+        if: ${{ env.push_image == 'true' }}
         uses: sigstore/cosign-installer@d58896d6a1865668819e1d91763c7751a165e159 # v3.9.2
 
       - name: Sign image with Cosign
-        if: ${{ github.ref == 'refs/heads/main' }}
+        if: ${{ env.push_image == 'true' }}
         id: cosign
         env:
           DIGEST: ${{ steps.build-docker.outputs.digest }}
@@ -105,7 +114,7 @@ jobs:
           echo "images=${images}" >> $GITHUB_OUTPUT
 
       - name: Verify the signed image with Cosign
-        if: ${{ github.ref == 'refs/heads/main' }}
+        if: ${{ env.push_image == 'true' }}
         run: |
           cosign verify \
             --certificate-identity "${{ github.server_url }}/${{ github.workflow_ref }}" \
@@ -131,7 +140,7 @@ jobs:
         uses: helm/kind-action@0025e74a8c7512023d06dc019c617aa3cf561fde # v1.10.0
 
       - name: Load image into kind
-        if: ${{ github.ref != 'refs/heads/main' }}
+        if: ${{ env.push_image != 'true' }}
         env:
           IMAGE: ${{ steps.image-tags.outputs.primary_tag }}
         run: |
