@@ -8,8 +8,6 @@
 * @bitwarden/team-secrets-manager-dev
 
 # Workflows ownership
-.github/workflows/build_ghcr.yml @bitwarden/dept-bre
-.github/workflows/build.yml @bitwarden/dept-bre
 .github/workflows/bump_version.yml @bitwarden/dept-bre
 .github/workflows/release.yml @bitwarden/dept-bre
 
