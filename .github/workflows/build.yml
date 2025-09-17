@@ -121,21 +121,6 @@ jobs:
             --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
             ${{ steps.cosign.outputs.images }}
 
-      - name: Scan Docker image
-        id: container-scan
-        uses: anchore/scan-action@df395807f4554463d4455b8047cf58e37b6acaae # v6.5.0
-        with:
-          image: ${{ steps.image-tags.outputs.primary_tag }}
-          fail-build: false
-          output-format: sarif
-
-      - name: Upload Grype results to GitHub
-        uses: github/codeql-action/upload-sarif@51f77329afa6477de8c49fc9c7046c15b9a4e79d # v3.29.5
-        with:
-          sarif_file: ${{ steps.container-scan.outputs.sarif }}
-          sha: ${{ contains(github.event_name, 'pull_request') && github.event.pull_request.head.sha || github.sha }}
-          ref: ${{ contains(github.event_name, 'pull_request') && format('refs/pull/{0}/head', github.event.pull_request.number) || github.ref }}
-
       - name: Create kind cluster
         uses: helm/kind-action@0025e74a8c7512023d06dc019c617aa3cf561fde # v1.10.0
 
