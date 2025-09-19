@@ -4,22 +4,34 @@ on:
   workflow_dispatch:
     inputs:
       version_number:
-        description: "New version number"
+        description: "New version number (Ex 1.2.3)"
         required: true
 
 jobs:
   bump_version:
     name: Bump version
     runs-on: ubuntu-22.04
-    environment: Production
     permissions:
       contents: write
       pull-requests: write
       id-token: write
+    env:
+      _VERSION_NUMBER: ${{ inputs.version_number }}
 
     steps:
+      - name: Setup and validate version number
+        id: setup
+        run: |
+          if ! [[ "$_VERSION_NUMBER" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Error: Version number ($_VERSION_NUMBER) is not in semantic version format (X.Y.Z)"
+            exit 1
+          fi
+          echo "branch_name=version_bump_$_VERSION_NUMBER" >> "$GITHUB_OUTPUT"
+
       - name: Check out repo
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          persist-credentials: true
 
       - name: Log in to Azure
         uses: bitwarden/gh-actions/azure-login@main
@@ -39,7 +51,7 @@ jobs:
         uses: bitwarden/gh-actions/azure-logout@main
 
       - name: Import GPG key
-        uses: crazy-max/ghaction-import-gpg@01dd5d3ca463c7f10f7f4f7b4f177225ac661ee4 # v6.1.0
+        uses: crazy-max/ghaction-import-gpg@e89d40939c28e39f97cf32126055eeae86ba74ec # v6.3.0
         with:
           gpg_private_key: ${{ steps.retrieve-secrets.outputs.github-gpg-private-key }}
           passphrase: ${{ steps.retrieve-secrets.outputs.github-gpg-private-key-passphrase }}
@@ -47,11 +59,13 @@ jobs:
           git_commit_gpgsign: true
 
       - name: Create branch
-        run: git switch -c version_bump_${{ github.event.inputs.version_number }}
+        env:
+          BRANCH_NAME: "${{ steps.setup.outputs.branch_name }}"
+        run: git switch -c "$BRANCH_NAME"
 
       - name: Bump version
         run: |
-          sed -i -E '/^VERSION\s+\?=\s+[^\s]+/!b;cVERSION ?= ${{ github.event.inputs.version_number }}' Makefile
+          sed -i "s/^VERSION ?= .*/VERSION ?= $_VERSION_NUMBER/" Makefile
 
       - name: Set up Git
         run: |
@@ -62,34 +76,34 @@ jobs:
         id: version-changed
         run: |
           if [ -n "$(git status --porcelain)" ]; then
-            echo "changes_to_commit=TRUE" >> $GITHUB_OUTPUT
+            echo "changes_to_commit=TRUE" >> "$GITHUB_OUTPUT"
           else
-            echo "changes_to_commit=FALSE" >> $GITHUB_OUTPUT
+            echo "changes_to_commit=FALSE" >> "$GITHUB_OUTPUT"
             echo "No changes to commit!";
           fi
 
       - name: Commit files
         if: ${{ steps.version-changed.outputs.changes_to_commit == 'TRUE' }}
-        run: git commit -m "Bumped version to ${{ github.event.inputs.version_number }}" -a
+        run: git commit -m "Bumped version to $_VERSION_NUMBER" -a
 
       - name: Push changes
         if: ${{ steps.version-changed.outputs.changes_to_commit == 'TRUE' }}
-        run: git push -u origin version_bump_${{ github.event.inputs.version_number }}
+        env:
+          BRANCH_NAME: "${{ steps.setup.outputs.branch_name }}"
+        run: git push -u origin "$BRANCH_NAME"
 
       - name: Create version PR
         if: ${{ steps.version-changed.outputs.changes_to_commit == 'TRUE' }}
         id: create-pr
         env:
-          PR_BRANCH: "version_bump_${{ github.event.inputs.version_number }}"
+          PR_BRANCH: "${{ steps.setup.outputs.branch_name }}"
           GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
           BASE_BRANCH: main
-          TITLE: "Bump version to ${{ github.event.inputs.version_number }}"
+          TITLE: "Bump version to ${{ env._VERSION_NUMBER }}"
         run: |
           gh pr create --title "$TITLE" \
             --base "$BASE" \
             --head "$PR_BRANCH" \
-            --label "version update" \
-            --label "automated pr" \
             --body "
               ## Type of change
               - [ ] Bug fix
@@ -99,4 +113,4 @@ jobs:
               - [X] Other
 
               ## Objective
-              Automated version bump to ${{ github.event.inputs.version_number }}"
+              Automated version bump to $_VERSION_NUMBER"

@@ -1,38 +1,51 @@
-name: Build
+name: Build and test
 
 on:
+  pull_request:
+  push:
+    branches:
+      - "main"
   workflow_dispatch:
+    inputs:
+      push_image:
+        description: "Push image to GitHub Container Registry (Always true on main)"
+        required: false
+        default: false
+        type: boolean
+
+env:
+  _PUSH_IMAGE: ${{ (inputs.push_image == true || github.ref == 'refs/heads/main') && 'true' || 'false' }}
 
 jobs:
-  build-docker:
-    name: Build Docker images
-    runs-on: ubuntu-22.04
+  build-and-test:
+    name: Build image and test
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
+      packages: write
+      security-events: write
       id-token: write
     env:
-      _AZ_REGISTRY: bitwardenprod.azurecr.io
-      _PROJECT_NAME: sm-operator
+      _IMAGE_NAME: ghcr.io/bitwarden/sm-operator
 
     steps:
       - name: Check out repo
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          persist-credentials: false
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@29109295f81e9208d7d86ff1c6c12d2833863392 # v3
+        uses: docker/setup-qemu-action@29109295f81e9208d7d86ff1c6c12d2833863392 # v3.6.0
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3.11.1
 
-      - name: Log in to Azure
-        uses: bitwarden/gh-actions/azure-login@main
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@184bdaa0721073962dff0199f1fb9940f07167d1 # v3.5.0
         with:
-          subscription_id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-          tenant_id: ${{ secrets.AZURE_TENANT_ID }}
-          client_id: ${{ secrets.AZURE_CLIENT_ID }}
-
-      - name: Log in to ACR
-        run: az acr login -n ${_AZ_REGISTRY%.azurecr.io}
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Test operator
         id: test
@@ -42,45 +55,95 @@ jobs:
           make test
 
       - name: Upload to codecov.io
-        uses: codecov/codecov-action@1e68e06f1dbfde0e4cefc87efeba9e4643565303 # v5.1.2
+        uses: codecov/codecov-action@5a1091511ad55cbe89839c7260b706298ca349f7 # v5.5.1
 
       - name: Generate Docker image tag
         id: tag
+        env:
+          EVENT_TYPE: ${{ contains(github.event_name, 'pull_request') && 'pull_request' || '' }}
         run: |
-          IMAGE_TAG=$(echo "${GITHUB_REF:11}" | sed "s#/#-#g")  # slash safe branch name
-          if [[ "$IMAGE_TAG" == "main" ]]; then
-            IMAGE_TAG=dev
-          fi
-          echo "image_tag=$IMAGE_TAG" >> $GITHUB_OUTPUT
+          if [[ "$EVENT_TYPE" == "pull_request" ]]; then
+            IMAGE_TAG="pr-${{ github.event.pull_request.number }}"
+          else
+            ref="${GITHUB_REF:11}"
+            IMAGE_TAG="${ref//\//-}"
 
-      - name: Generate image full name
-        id: image-name
+            if [[ "${IMAGE_TAG}" == "main" ]]; then
+              IMAGE_TAG="dev"
+            fi
+          fi
+          echo "image_tag=$IMAGE_TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Generate image tag(s)
+        id: image-tags
         env:
           IMAGE_TAG: ${{ steps.tag.outputs.image_tag }}
-        run: echo "name=${_AZ_REGISTRY}/${_PROJECT_NAME}:${IMAGE_TAG}" >> $GITHUB_OUTPUT
+          SHA: ${{ github.sha }}
+        run: |
+          TAGS="$_IMAGE_NAME:$IMAGE_TAG"
+          echo "primary_tag=$TAGS" >> "$GITHUB_OUTPUT"
+          if [[ "$IMAGE_TAG" == "dev" ]]; then
+            SHORT_SHA="$(git rev-parse --short "${SHA}")"
+            TAGS="$TAGS,$TAGS-${SHORT_SHA}"
+          fi
+          echo "tags=$TAGS" >> "$GITHUB_OUTPUT"
 
       - name: Build Docker image
-        uses: docker/build-push-action@4f58ea79222b3b9dc2c8bbdd6debcef730109a75 # v6.9.0
+        id: build-docker
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
         with:
           file: Dockerfile
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: ${{ steps.image-name.outputs.name }}
+          platforms: ${{ env._PUSH_IMAGE == 'true' && 'linux/amd64,linux/arm64' || 'linux/amd64' }} # Can only do single arch when not pushing to support scan and testing locally
+          push: ${{ env._PUSH_IMAGE == 'true' }}
+          load: ${{ env._PUSH_IMAGE != 'true' }}
+          tags: ${{ steps.image-tags.outputs.tags }}
+
+      - name: Install Cosign
+        if: ${{ env._PUSH_IMAGE == 'true' }}
+        uses: sigstore/cosign-installer@d7543c93d881b35a8faa02e8e3605f69b7a1ce62 # v3.10.0
+
+      - name: Sign image with Cosign
+        if: ${{ env._PUSH_IMAGE == 'true' }}
+        id: cosign
+        env:
+          DIGEST: ${{ steps.build-docker.outputs.digest }}
+          TAGS: ${{ steps.image-tags.outputs.tags }}
+        run: |
+          IFS="," read -a tags <<< "${TAGS}"
+          images=""
+          for tag in "${tags[@]}"; do
+            images+="${tag}@${DIGEST} "
+          done
+          cosign sign --yes "${images}"
+          echo "images=${images}" >> "$GITHUB_OUTPUT"
+
+      - name: Verify the signed image with Cosign
+        if: ${{ env._PUSH_IMAGE == 'true' }}
+        env:
+          GITHUB_SERVER_URL: "${{ github.server_url }}"
+          REF: "${{ github.workflow_ref }}"
+          IMAGES: "${{ steps.cosign.outputs.images }}"
+        run: |
+          cosign verify \
+            --certificate-identity "$GITHUB_SERVER_URL/$REF" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+            "$IMAGES"
 
       - name: Create kind cluster
-        uses: helm/kind-action@0025e74a8c7512023d06dc019c617aa3cf561fde # v1.10.0
+        uses: helm/kind-action@a1b0e391336a6ee6713a0583f8c6240d70863de3 # v1.12.0
+
+      - name: Load image into kind
+        if: ${{ env._PUSH_IMAGE != 'true' }}
+        env:
+          IMAGE: ${{ steps.image-tags.outputs.primary_tag }}
+        run: kind load docker-image "$IMAGE" --name "$(kind get clusters)"
 
       - name: Smoke test image
         id: smoke-test
         env:
-          IMAGE: ${{ steps.image-name.outputs.name }}
+          IMAGE: ${{ steps.image-tags.outputs.primary_tag }}
         run: |
-          make deploy IMG=$IMAGE
-
-          #Setup image pull secret (Until repo is made public)
-          kubectl create secret -n sm-operator-system docker-registry ghcr-login-secret --docker-server=ghcr.io --docker-username=bitwarden-devops-bot --docker-password=${{ secrets.GITHUB_TOKEN }} --docker-email=106330231+bitwarden-devops-bot@users.noreply.github.com
-
-          kubectl patch deployment sm-operator-controller-manager -n sm-operator-system --patch-file "$GITHUB_WORKSPACE/.github/workflows/test_files/deployment-patch.yaml"
+          make deploy IMG="$IMAGE"
 
           count=0
           while [[ $(kubectl get pods -n sm-operator-system -l control-plane=controller-manager -o jsonpath="{.items[*].status.containerStatuses[*].ready}") != "true" ]]; do
@@ -97,7 +160,7 @@ jobs:
 
           echo "*****PODS*****"
           pods=$(kubectl get pods -n sm-operator-system -l control-plane=controller-manager | grep 2/2)
-          echo $pods
+          echo "$pods"
 
           if [[ -z "$pods" ]]; then
             echo "::error::No pods found."
@@ -111,5 +174,5 @@ jobs:
           make undeploy
           kind delete cluster
 
-      - name: Log out from Azure
-        uses: bitwarden/gh-actions/azure-logout@main
+      - name: Log out of Docker
+        run: docker logout ghcr.io
