@@ -128,8 +128,7 @@ jobs:
         if: ${{ env._PUSH_IMAGE != 'true' }}
         env:
           IMAGE: ${{ steps.image-tags.outputs.primary_tag }}
-        run: |
-          kind load docker-image "$IMAGE" --name "$(kind get clusters)"
+        run: kind load docker-image "$IMAGE" --name "$(kind get clusters)"
 
       - name: Smoke test image
         id: smoke-test
