@@ -90,7 +90,7 @@ jobs:
       - name: Push changes
         if: ${{ steps.version-changed.outputs.changes_to_commit == 'TRUE' }}
         env:
-          BRANCH_NAME: ${{ steps.setup.outputs.branch_name }}
+          BRANCH_NAME: "${{ steps.setup.outputs.branch_name }}"
         run: git push -u origin "$BRANCH_NAME"
 
       - name: Create version PR
