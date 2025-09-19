@@ -77,7 +77,6 @@ jobs:
         run: |
           if [ -n "$(git status --porcelain)" ]; then
             echo "changes_to_commit=TRUE" >> "$GITHUB_OUTPUT"
-            git diff
           else
             echo "changes_to_commit=FALSE" >> "$GITHUB_OUTPUT"
             echo "No changes to commit!";
