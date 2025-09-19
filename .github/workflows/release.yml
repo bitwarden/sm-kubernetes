@@ -33,12 +33,14 @@ jobs:
 
       - name: Check out repo
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          persist-credentials: false
 
       - name: Get version
         id: version
         run: |
           VERSION=$(sed -nE 's/^VERSION\s+\?=\s+([^\s]+)/\1/p' Makefile)
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
   release:
     name: Release
@@ -52,7 +54,7 @@ jobs:
     steps:
       - name: Create release
         if: ${{ inputs.release_type != 'Dry Run' }}
-        uses: ncipollo/release-action@bcfe5470707e8832e12347755757cec0eb3c22af # v1.18.0
+        uses: ncipollo/release-action@b7eabc95ff50cbeeedec83973935c8f306dfcd0b # v1.20.0
         with:
           commit: ${{ github.sha }}
           tag: v${{ env._PKG_VERSION }}
@@ -76,7 +78,7 @@ jobs:
 
     steps:
       - name: Log in to GitHub Container Registry
-        uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
+        uses: docker/login-action@184bdaa0721073962dff0199f1fb9940f07167d1 # v3.5.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
