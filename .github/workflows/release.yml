@@ -1,16 +1,15 @@
 name: Release
-run-name: Release ${{ github.event.inputs.release_type }}
+run-name: Release ${{ inputs.release_type }}
 
 on:
   workflow_dispatch:
     inputs:
       release_type:
         description: "Release Options"
-        default: "Initial Release"
+        default: "Release"
         type: choice
         options:
-          - Initial Release
-          - Redeploy
+          - Release
           - Dry Run
 
 jobs:
@@ -18,13 +17,12 @@ jobs:
     name: Setup
     permissions:
       contents: read
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     outputs:
       release_version: ${{ steps.version.outputs.version }}
-      branch-name: ${{ steps.branch.outputs.branch-name }}
     steps:
-      - name: Branch check
-        if: ${{ github.event.inputs.release_type != 'Dry Run' }}
+      - name: Check branch
+        if: ${{ inputs.release_type != 'Dry Run' }}
         run: |
           if [[ "$GITHUB_REF" != "refs/heads/main" ]]; then
             echo "==================================="
@@ -35,160 +33,66 @@ jobs:
 
       - name: Check out repo
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          persist-credentials: false
 
       - name: Get version
         id: version
         run: |
           VERSION=$(sed -nE 's/^VERSION\s+\?=\s+([^\s]+)/\1/p' Makefile)
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
-      - name: Get branch name
-        id: branch
-        run: |
-          BRANCH_NAME=$(basename ${{ github.ref }})
-          echo "branch-name=$BRANCH_NAME" >> $GITHUB_OUTPUT
-
-  release-github:
+  release:
     name: Release
-    if: ${{ github.event.inputs.release_type != 'Dry Run' }}
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     needs: setup
+    env:
+      _PKG_VERSION: ${{ needs.setup.outputs.release_version }}
     permissions:
       contents: write
+
     steps:
       - name: Create release
-        uses: ncipollo/release-action@2c591bcc8ecdcd2db72b97d6147f871fcd833ba5 # v1.14.0
+        if: ${{ inputs.release_type != 'Dry Run' }}
+        uses: ncipollo/release-action@b7eabc95ff50cbeeedec83973935c8f306dfcd0b # v1.20.0
         with:
           commit: ${{ github.sha }}
-          tag: "v${{ needs.setup.outputs.release_version }}"
-          name: "Version ${{ needs.setup.outputs.release_version }}"
+          tag: v${{ env._PKG_VERSION }}
+          name: v${{ env._PKG_VERSION }}
           body: "<insert release notes here>"
           token: ${{ secrets.GITHUB_TOKEN }}
           draft: true
 
-  release-docker:
-    name: Build Docker images
-    runs-on: ubuntu-22.04
+  release-ghcr:
+    name: Push Release to GitHub Container Registry
+    runs-on: ubuntu-24.04
     needs:
       - setup
-      - release-github
-    permissions:
-      contents: read
-      id-token: write
+      - release
     env:
-      _AZ_REGISTRY: bitwardenprod.azurecr.io
-      _PROJECT_NAME: sm-operator
-      _RELEASE_VERSION: ${{ needs.setup.outputs.release_version }}
-      _BRANCH_NAME: ${{ needs.setup.outputs.branch-name }}
-      _RELEASE_OPTION: ${{ github.event.inputs.release_type }}
+      _MAIN_TAG: dev
+      _RELEASE_TAG: ${{ needs.setup.outputs.release_version }}
+      _IMAGE_NAME: ghcr.io/bitwarden/sm-operator
+    permissions:
+      packages: write
 
     steps:
-      - name: Print environment
-        run: |
-          whoami
-          docker --version
-          echo "GitHub ref: $GITHUB_REF"
-          echo "GitHub event: $GITHUB_EVENT"
-          echo "Github Release Option: $_RELEASE_OPTION"
-
-      - name: Log in to Azure
-        uses: bitwarden/gh-actions/azure-login@main
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@184bdaa0721073962dff0199f1fb9940f07167d1 # v3.5.0
         with:
-          subscription_id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-          tenant_id: ${{ secrets.AZURE_TENANT_ID }}
-          client_id: ${{ secrets.AZURE_CLIENT_ID }}
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Log in to Azure ACR
-        run: az acr login -n ${_AZ_REGISTRY%.azurecr.io}
-
-      - name: Set up DCT
-        id: setup-dct
-        uses: bitwarden/gh-actions/setup-docker-trust@main
-        with:
-          azure-keyvault-name: "bitwarden-ci"
-
-      - name: Pull image
+      - name: Tag release
         run: |
-          if [[ "${{ github.event.inputs.release_type }}" == "Dry Run" ]]; then
-            docker pull $_AZ_REGISTRY/$_PROJECT_NAME:dev
-          else
-            docker pull $_AZ_REGISTRY/$_PROJECT_NAME:$_BRANCH_NAME
-          fi
+          docker pull "$_IMAGE_NAME:$_MAIN_TAG"
+          docker tag "$_IMAGE_NAME:$_MAIN_TAG" "$_IMAGE_NAME:$_RELEASE_TAG"
 
-      - name: Tag version and latest
+      - name: Push release
+        if: ${{ inputs.release_type != 'Dry Run' }}
         run: |
-          if [[ "${{ github.event.inputs.release_type }}" == "Dry Run" ]]; then
-            docker tag $_AZ_REGISTRY/$_PROJECT_NAME:dev bitwarden/$_PROJECT_NAME:dryrun
-          else
-            docker tag $_AZ_REGISTRY/$_PROJECT_NAME:$_BRANCH_NAME $_AZ_REGISTRY/$_PROJECT_NAME:$_RELEASE_VERSION
-            docker tag $_AZ_REGISTRY/$_PROJECT_NAME:$_BRANCH_NAME $_AZ_REGISTRY/$_PROJECT_NAME:latest
-
-            docker tag $_AZ_REGISTRY/$_PROJECT_NAME:$_BRANCH_NAME bitwarden/$_PROJECT_NAME:$_RELEASE_VERSION
-            docker tag $_AZ_REGISTRY/$_PROJECT_NAME:$_BRANCH_NAME bitwarden/$_PROJECT_NAME:latest
-          fi
-
-      - name: Push release version and latest image to ACR
-        if: ${{ github.event.inputs.release_type != 'Dry Run' }}
-        run: |
-          docker push $_AZ_REGISTRY/$_PROJECT_NAME:$_RELEASE_VERSION
-          docker push $_AZ_REGISTRY/$_PROJECT_NAME:latest
-
-      - name: Push release version and latest image to Docker Hub
-        if: ${{ github.event.inputs.release_type != 'Dry Run' }}
-        env:
-          DOCKER_CONTENT_TRUST: 1
-          DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE: ${{ steps.setup-dct.outputs.dct-delegate-repo-passphrase }}
-        run: |
-          docker push bitwarden/$_PROJECT_NAME:$_RELEASE_VERSION
-          docker push bitwarden/$_PROJECT_NAME:latest
+          docker push "$_IMAGE_NAME:$_RELEASE_TAG"
 
       - name: Log out of Docker
-        run: docker logout
-
-      - name: Log out from Azure
-        uses: bitwarden/gh-actions/azure-logout@main
-
-  check-failures:
-    name: Check for failures
-    if: always()
-    runs-on: ubuntu-22.04
-    needs:
-      - release-docker
-      - release-github
-      - setup
-    permissions:
-      id-token: write
-    steps:
-      - name: Check if any job failed
-        if: |
-          github.ref == 'refs/heads/main'
-          && contains(needs.*.result, 'failure')
-        run: exit 1
-
-      - name: Log in to Azure
-        if: failure()
-        uses: bitwarden/gh-actions/azure-login@main
-        with:
-          subscription_id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-          tenant_id: ${{ secrets.AZURE_TENANT_ID }}
-          client_id: ${{ secrets.AZURE_CLIENT_ID }}
-
-      - name: Retrieve secrets
-        id: retrieve-secrets
-        uses: bitwarden/gh-actions/get-keyvault-secrets@main
-        if: failure()
-        with:
-          keyvault: "bitwarden-ci"
-          secrets: "devops-alerts-slack-webhook-url"
-
-      - name: Log out from Azure
-        if: failure()
-        uses: bitwarden/gh-actions/azure-logout@main
-
-      - name: Notify Slack on failure
-        uses: act10ns/slack@44541246747a30eb3102d87f7a4cc5471b0ffb7d # v2.1.0
-        if: failure()
-        env:
-          SLACK_WEBHOOK_URL: ${{ steps.retrieve-secrets.outputs.devops-alerts-slack-webhook-url }}
-        with:
-          status: ${{ job.status }}
+        run: docker logout ghcr.io
