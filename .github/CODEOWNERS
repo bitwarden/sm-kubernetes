@@ -10,7 +10,8 @@
 # Workflows ownership
 .github/workflows/release.yml @bitwarden/dept-bre
 
-## Dockerfile shared ownership
+## Docker-related files
 **/Dockerfile @bitwarden/dept-bre @bitwarden/team-appsec
 **/.dockerignore @bitwarden/dept-bre @bitwarden/team-appsec
 **/entrypoint.sh @bitwarden/dept-bre @bitwarden/team-appsec
+**/docker-compose.yml @bitwarden/dept-bre @bitwarden/team-appsec
