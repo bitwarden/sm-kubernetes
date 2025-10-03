@@ -114,7 +114,7 @@ jobs:
           for tag in "${tags[@]}"; do
             images+="${tag}@${DIGEST} "
           done
-          cosign sign --yes ${images}
+          cosign sign --yes "${images}"
           echo "images=${images}" >> "$GITHUB_OUTPUT"
 
       - name: Verify the signed image with Cosign
@@ -126,7 +126,7 @@ jobs:
         run: |
           cosign verify \
             --certificate-identity "$GITHUB_SERVER_URL/$REF" \
-            --certificate-oidc-issuer "https://token.actions.githubusercontent.com" $IMAGES
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com" "$IMAGES"
 
       - name: Create kind cluster
         uses: helm/kind-action@a1b0e391336a6ee6713a0583f8c6240d70863de3 # v1.12.0
