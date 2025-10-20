@@ -128,7 +128,7 @@ func (r *BitwardenSecretReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 
 	//Get the secrets from the Bitwarden API based on lastSync and organizationId
 	//This will also indicate if the Bitwarden secret needs to be refreshed
-	refresh, secrets, err := r.PullSecretManagerSecretDeltas(logger, orgId, authToken, lastSync.Time)
+	refresh, secrets, secretKeys, err := r.PullSecretManagerSecretDeltas(logger, orgId, authToken, lastSync.Time, bwSecret.Spec.ProjectIds)
 
 	if err != nil {
 		logErr := r.LogError(logger, ctx, bwSecret, err, fmt.Sprintf("Error pulling Secret Manager secrets from API => API: %s -- Identity: %s -- State: %s -- OrgId: %s ", r.BitwardenClientFactory.GetApiUrl(), r.BitwardenClientFactory.GetIdentityApiUrl(), r.StatePath, orgId))
@@ -180,7 +180,7 @@ func (r *BitwardenSecretReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		}
 		k8sSecret.ObjectMeta.Labels[LabelBwSecret] = string(bwSecret.UID)
 
-		ApplySecretMap(secrets, bwSecret, k8sSecret)
+		ApplySecretMap(logger, secrets, secretKeys, bwSecret, k8sSecret)
 
 		err = r.SetK8sSecretAnnotations(bwSecret, k8sSecret)
 
@@ -269,42 +269,61 @@ func (r *BitwardenSecretReconciler) LogCompletion(logger logr.Logger, ctx contex
 // This function will determine if any secrets have been updated and return all secrets assigned to the machine account if so.
 // First returned value is a boolean stating if something changed or not.
 // The second returned value is a mapping of secret IDs and their values from Secrets Manager
-func (r *BitwardenSecretReconciler) PullSecretManagerSecretDeltas(logger logr.Logger, orgId string, authToken string, lastSync time.Time) (bool, map[string][]byte, error) {
+// The third returned value is a mapping of secret IDs to their keys from Secrets Manager
+func (r *BitwardenSecretReconciler) PullSecretManagerSecretDeltas(logger logr.Logger, orgId string, authToken string, lastSync time.Time, projectIds []string) (bool, map[string][]byte, map[string]string, error) {
 	bitwardenClient, err := r.BitwardenClientFactory.GetBitwardenClient()
 	if err != nil {
 		logger.Error(err, "Failed to create client")
-		return false, nil, err
+		return false, nil, nil, err
 	}
 
 	err = bitwardenClient.AccessTokenLogin(authToken, &r.StatePath)
 	if err != nil {
 		logger.Error(err, "Failed to authenticate")
-		return false, nil, err
+		return false, nil, nil, err
 	}
 
 	secrets := map[string][]byte{}
+	secretKeys := map[string]string{}
 
 	smSecretResponse, err := bitwardenClient.Secrets().Sync(orgId, &lastSync)
 
 	if err != nil {
 		logger.Error(err, "Failed to get secrets since last sync.")
-		return false, nil, err
+		return false, nil, nil, err
 	}
 
 	if smSecretResponse == nil {
 		logger.Info("No secret response from Bitwarden")
-		return false, nil, nil
+		return false, nil, nil, nil
 	}
 
 	smSecretVals := smSecretResponse.Secrets
 
+	// Build a map of project IDs for filtering if specified
+	projectFilter := make(map[string]bool)
+	if len(projectIds) > 0 {
+		for _, projectId := range projectIds {
+			projectFilter[projectId] = true
+		}
+	}
+
 	for _, smSecretVal := range smSecretVals {
+		// Filter by project if projectIds are specified
+		if len(projectFilter) > 0 {
+			// Only include secrets that belong to one of the specified projects
+			if smSecretVal.ProjectID == nil || !projectFilter[*smSecretVal.ProjectID] {
+				continue
+			}
+		}
+
 		secrets[smSecretVal.ID] = []byte(smSecretVal.Value)
+		secretKeys[smSecretVal.ID] = smSecretVal.Key
 	}
 
 	defer bitwardenClient.Close()
 
-	return smSecretResponse.HasChanges, secrets, nil
+	return smSecretResponse.HasChanges, secrets, secretKeys, nil
 }
 
 func CreateK8sSecret(bwSecret *operatorsv1.BitwardenSecret) *corev1.Secret {
@@ -321,7 +340,7 @@ func CreateK8sSecret(bwSecret *operatorsv1.BitwardenSecret) *corev1.Secret {
 	return secret
 }
 
-func ApplySecretMap(secrets map[string][]byte, bwSecret *operatorsv1.BitwardenSecret, k8sSecret *corev1.Secret) {
+func ApplySecretMap(logger logr.Logger, secrets map[string][]byte, secretKeys map[string]string, bwSecret *operatorsv1.BitwardenSecret, k8sSecret *corev1.Secret) {
 	k8sSecret.Data = make(map[string][]byte)
 
 	//If we are doing a straight up synch with no map, dump them across and return
@@ -330,19 +349,65 @@ func ApplySecretMap(secrets map[string][]byte, bwSecret *operatorsv1.BitwardenSe
 		return
 	}
 
+	// Track seen keys for duplicate detection when using UseKeyMapping
+	seenKeys := make(map[string]bool)
+
 	for key, secret := range secrets {
 		mapping, isThere := FindSecretMapByBwSecretId(&bwSecret.Spec, key) //see if this particular secret is in the map
 		if bwSecret.Spec.OnlyMappedSecrets && !isThere {
 			continue //Not in map and we're only synching mapped secrets, so move on.
 		}
 
-		targetKey := key //defaulting to BwSecretId
+		targetKey := key //defaulting to BwSecretId (UUID)
+
+		// Priority order for key selection:
+		// 1. Explicit SecretMap mapping (highest priority)
+		// 2. UseKeyMapping (use secret key from Secrets Manager)
+		// 3. Default to UUID
 		if isThere {
 			targetKey = mapping.SecretKeyName //Found in map, so set the target key to the alias
+		} else if bwSecret.Spec.UseKeyMapping {
+			if secretKey, ok := secretKeys[key]; ok && secretKey != "" {
+				// Sanitize the key
+				sanitizedKey := sanitizeSecretKey(secretKey)
+				
+				// Check for duplicate keys after sanitization
+				if seenKeys[sanitizedKey] {
+					logger.Info("Warning: Duplicate secret key detected after sanitization. The last secret with this key will be used.", "originalKey", secretKey, "sanitizedKey", sanitizedKey, "secretId", key)
+				}
+				seenKeys[sanitizedKey] = true
+
+				// Warn if the key needed sanitization
+				if sanitizedKey != secretKey {
+					logger.Info("Warning: Secret key contains characters not allowed by Kubernetes. It has been sanitized.", "originalKey", secretKey, "sanitizedKey", sanitizedKey, "secretId", key)
+				}
+
+				targetKey = sanitizedKey //Use the sanitize key from Secrets Manager
+			}
 		}
 
 		k8sSecret.Data[targetKey] = secret
 	}
+}
+
+// sanitizeSecretKey converts a secret key to be POSIX-compliant
+// This function replaces any invalid character with an underscore
+func sanitizeSecretKey(s string) string {
+	if len(s) == 0 {
+		return s
+	}
+	
+	result := make([]rune, 0, len(s))
+	for _, c := range s {
+		// Kubernetes allows: alphanumerics, dash, underscore, and period
+		if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-' || c == '_' || c == '.' {
+			result = append(result, c)
+		} else {
+			// Replace invalid characters with underscore
+			result = append(result, '_')
+		}
+	}
+	return string(result)
 }
 
 // FindSecretMapByBwSecretId returns the SecretMap entry with the specified BwSecretId, if found.

@@ -51,6 +51,19 @@ type BitwardenSecretSpec struct {
 	// +kubebuilder:validation:Optional
 	// +kubebuilder:default=true
 	OnlyMappedSecrets bool `json:"onlyMappedSecrets"`
+	// ProjectIds, when specified, restricts the Kubernetes Secret to only include secrets from the specified projects.
+	// When empty or unset, all secrets accessible by the machine account in the organization are included.
+	// +kubebuilder:Optional
+	ProjectIds []string `json:"projectIds,omitempty"`
+	// UseKeyMapping, when true, automatically uses the secret key from Bitwarden Secrets Manager as the Kubernetes secret key instead of the UUID.
+	// When false or unset, the UUID is used as the key. This can be combined with SecretMap for additional custom mappings.
+	// Note: Keys are sanitized to comply with Kubernetes requirements (only alphanumerics, dash, underscore, period allowed).
+	// Invalid characters are replaced with underscores. A warning is logged when sanitization occurs.
+	// Duplicate keys (after sanitization) will log a warning and the last secret will be used.
+	// Defaults to false for backward compatibility.
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:default=false
+	UseKeyMapping bool `json:"useKeyMapping"`
 }
 
 type AuthToken struct {
