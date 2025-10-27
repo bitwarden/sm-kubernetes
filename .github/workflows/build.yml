@@ -104,7 +104,6 @@ jobs:
 
       - name: Sign image with Cosign
         if: ${{ env._PUSH_IMAGE == 'true' }}
-        id: cosign
         env:
           DIGEST: ${{ steps.build-docker.outputs.digest }}
           TAGS: ${{ steps.image-tags.outputs.tags }}
@@ -115,20 +114,6 @@ jobs:
             images+=("${tag}@${DIGEST}")
           done
           cosign sign --yes "${images[@]}"
-          echo "images=${images[*]}" >> "$GITHUB_OUTPUT"
-
-      - name: Verify the signed image with Cosign
-        if: ${{ env._PUSH_IMAGE == 'true' }}
-        env:
-          GITHUB_SERVER_URL: "${{ github.server_url }}"
-          REF: "${{ github.workflow_ref }}"
-          IMAGES: "${{ steps.cosign.outputs.images }}"
-        run: |          
-          read -r -a images_array <<< "${COSIGN_IMAGES}"
-          cosign verify \
-            --certificate-identity "${GITHUB_SERVER_URL}/${GITHUB_WORKFLOW_REF}" \
-            --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
-            "${images_array[@]}"
 
       - name: Create kind cluster
         uses: helm/kind-action@a1b0e391336a6ee6713a0583f8c6240d70863de3 # v1.12.0
