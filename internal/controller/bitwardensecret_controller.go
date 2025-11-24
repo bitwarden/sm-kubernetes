@@ -128,7 +128,7 @@ func (r *BitwardenSecretReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 
 	//Get the secrets from the Bitwarden API based on lastSync and organizationId
 	//This will also indicate if the Bitwarden secret needs to be refreshed
-	refresh, secrets, err := r.PullSecretManagerSecretDeltas(logger, orgId, authToken, lastSync.Time)
+	refresh, secrets, err := r.PullSecretManagerSecretDeltas(logger, orgId, authToken, lastSync.Time, bwSecret.Spec.UseSecretNames)
 
 	if err != nil {
 		logErr := r.LogError(logger, ctx, bwSecret, err, fmt.Sprintf("Error pulling Secret Manager secrets from API => API: %s -- Identity: %s -- State: %s -- OrgId: %s ", r.BitwardenClientFactory.GetApiUrl(), r.BitwardenClientFactory.GetIdentityApiUrl(), r.StatePath, orgId))
@@ -266,10 +266,41 @@ func (r *BitwardenSecretReconciler) LogCompletion(logger logr.Logger, ctx contex
 	return nil
 }
 
+// ValidateSecretKeyName validates that a secret key name is POSIX-compliant.
+// POSIX-compliant names are required for environment variable compatibility:
+// - Must start with a letter (a-z, A-Z) or underscore (_)
+// - Can only contain letters, digits (0-9), and underscores
+// - Cannot be empty
+func ValidateSecretKeyName(key string) error {
+	if key == "" {
+		return fmt.Errorf("secret key cannot be empty")
+	}
+
+	// Check first character
+	firstChar := key[0]
+	if !((firstChar >= 'a' && firstChar <= 'z') ||
+		(firstChar >= 'A' && firstChar <= 'Z') ||
+		firstChar == '_') {
+		return fmt.Errorf("secret key '%s' must start with a letter or underscore", key)
+	}
+
+	// Check remaining characters
+	for i, char := range key {
+		if !((char >= 'a' && char <= 'z') ||
+			(char >= 'A' && char <= 'Z') ||
+			(char >= '0' && char <= '9') ||
+			char == '_') {
+			return fmt.Errorf("secret key '%s' contains invalid character '%c' at position %d (only alphanumeric and underscore allowed)", key, char, i)
+		}
+	}
+
+	return nil
+}
+
 // This function will determine if any secrets have been updated and return all secrets assigned to the machine account if so.
 // First returned value is a boolean stating if something changed or not.
-// The second returned value is a mapping of secret IDs and their values from Secrets Manager
-func (r *BitwardenSecretReconciler) PullSecretManagerSecretDeltas(logger logr.Logger, orgId string, authToken string, lastSync time.Time) (bool, map[string][]byte, error) {
+// The second returned value is a mapping of secret IDs (or names if useSecretNames is true) and their values from Secrets Manager
+func (r *BitwardenSecretReconciler) PullSecretManagerSecretDeltas(logger logr.Logger, orgId string, authToken string, lastSync time.Time, useSecretNames bool) (bool, map[string][]byte, error) {
 	bitwardenClient, err := r.BitwardenClientFactory.GetBitwardenClient()
 	if err != nil {
 		logger.Error(err, "Failed to create client")
@@ -298,12 +329,78 @@ func (r *BitwardenSecretReconciler) PullSecretManagerSecretDeltas(logger logr.Lo
 
 	smSecretVals := smSecretResponse.Secrets
 
+	// Legacy mode: Use UUIDs as keys (default behavior for backward compatibility)
+	if !useSecretNames {
+		for _, smSecretVal := range smSecretVals {
+			secrets[smSecretVal.ID] = []byte(smSecretVal.Value)
+		}
+		defer bitwardenClient.Close()
+		return smSecretResponse.HasChanges, secrets, nil
+	}
+
+	// New mode: Use secret names with validation and duplicate detection
+	seenKeys := make(map[string][]string) // Track duplicates: key -> []secretIDs
+	var invalidKeys []string
+
+	// First pass: validate and detect duplicates
 	for _, smSecretVal := range smSecretVals {
-		secrets[smSecretVal.ID] = []byte(smSecretVal.Value)
+		secretKey := smSecretVal.Key
+
+		// Validate POSIX compliance
+		if err := ValidateSecretKeyName(secretKey); err != nil {
+			logger.Error(err, "Invalid secret key name",
+				"secretId", smSecretVal.ID,
+				"secretKey", secretKey)
+			invalidKeys = append(invalidKeys,
+				fmt.Sprintf("%s (ID: %s): %v", secretKey, smSecretVal.ID, err))
+			continue
+		}
+
+		// Track for duplicate detection
+		seenKeys[secretKey] = append(seenKeys[secretKey], smSecretVal.ID)
+	}
+
+	// Check for duplicates
+	var duplicates []string
+	for key, ids := range seenKeys {
+		if len(ids) > 1 {
+			duplicates = append(duplicates,
+				fmt.Sprintf("'%s' (IDs: %v)", key, ids))
+		}
+	}
+
+	// Fail if validation or duplicate errors found
+	if len(invalidKeys) > 0 || len(duplicates) > 0 {
+		var errMsg string
+
+		if len(invalidKeys) > 0 {
+			errMsg += "Invalid secret key names found:\n"
+			for _, invalid := range invalidKeys {
+				errMsg += fmt.Sprintf("  - %s\n", invalid)
+			}
+		}
+
+		if len(duplicates) > 0 {
+			if len(invalidKeys) > 0 {
+				errMsg += "\n"
+			}
+			errMsg += "Duplicate secret key names detected:\n"
+			for _, dup := range duplicates {
+				errMsg += fmt.Sprintf("  - %s\n", dup)
+			}
+			errMsg += "\nEach secret must have a unique name. Please rename the conflicting secrets in Secrets Manager."
+		}
+
+		defer bitwardenClient.Close()
+		return false, nil, fmt.Errorf(errMsg)
+	}
+
+	// Second pass: build the secrets map using names
+	for _, smSecretVal := range smSecretVals {
+		secrets[smSecretVal.Key] = []byte(smSecretVal.Value)
 	}
 
 	defer bitwardenClient.Close()
-
 	return smSecretResponse.HasChanges, secrets, nil
 }
 

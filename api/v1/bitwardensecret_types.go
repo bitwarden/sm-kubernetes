@@ -51,6 +51,14 @@ type BitwardenSecretSpec struct {
 	// +kubebuilder:validation:Optional
 	// +kubebuilder:default=true
 	OnlyMappedSecrets bool `json:"onlyMappedSecrets"`
+	// UseSecretNames, when true, uses the secret names from Bitwarden Secrets Manager as Kubernetes secret keys.
+	// When false or unset (default), uses secret UUIDs as keys (preserving backward compatibility).
+	// When enabled, secret names must be POSIX-compliant (start with letter/underscore, contain only alphanumeric/underscore)
+	// and must be unique across all accessible secrets. Validation errors will prevent secret synchronization.
+	// Defaults to false.
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:default=false
+	UseSecretNames bool `json:"useSecretNames,omitempty"`
 }
 
 type AuthToken struct {
