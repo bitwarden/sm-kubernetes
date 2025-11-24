@@ -11,6 +11,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
@@ -238,22 +239,33 @@ var _ = Describe("Secret Name Validation Tests", Ordered, func() {
 			_, err := fixture.CreateDefaultAuthSecret(namespace)
 			Expect(err).NotTo(HaveOccurred())
 
-			// Create BitwardenSecret with useSecretNames enabled
-			bwSecret, err := fixture.CreateBitwardenSecret(
-				testutils.BitwardenSecretName,
-				namespace,
-				fixture.OrgId,
-				testutils.SynchronizedSecretName,
-				testutils.AuthSecretName,
-				testutils.AuthSecretKey,
-				[]operatorsv1.SecretMap{},
-				false,
-			)
+			// Create BitwardenSecret directly with useSecretNames enabled
+			bwSecret := &operatorsv1.BitwardenSecret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      testutils.BitwardenSecretName,
+					Namespace: namespace,
+				},
+				Spec: operatorsv1.BitwardenSecretSpec{
+					AuthToken: operatorsv1.AuthToken{
+						SecretName: testutils.AuthSecretName,
+						SecretKey:  testutils.AuthSecretKey,
+					},
+					SecretName:        testutils.SynchronizedSecretName,
+					OrganizationId:    fixture.OrgId,
+					SecretMap:         []operatorsv1.SecretMap{},
+					OnlyMappedSecrets: false,
+					UseSecretNames:    true, // Enable name-based mode from the start
+				},
+			}
+			err = fixture.K8sClient.Create(fixture.Ctx, bwSecret)
 			Expect(err).NotTo(HaveOccurred())
 
-			bwSecret.Spec.UseSecretNames = true
-			err = fixture.K8sClient.Update(fixture.Ctx, bwSecret)
-			Expect(err).NotTo(HaveOccurred())
+			// Wait for BitwardenSecret to be created
+			Eventually(func(g Gomega) {
+				fetched := &operatorsv1.BitwardenSecret{}
+				err := fixture.K8sClient.Get(fixture.Ctx, types.NamespacedName{Name: testutils.BitwardenSecretName, Namespace: namespace}, fetched)
+				g.Expect(err).NotTo(HaveOccurred())
+			}).WithTimeout(10 * time.Second).WithPolling(100 * time.Millisecond).Should(Succeed())
 
 			// Trigger reconciliation - should fail
 			req := reconcile.Request{NamespacedName: types.NamespacedName{Name: testutils.BitwardenSecretName, Namespace: namespace}}
