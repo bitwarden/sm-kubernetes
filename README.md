@@ -94,13 +94,13 @@ Our operator is designed to look for the creation of a custom resource called a 
 -   **spec.organizationId**: The Bitwarden organization ID you are pulling Secrets Manager data from
 -   **spec.secretName**: The name of the Kubernetes secret that will be created and injected with Secrets Manager data.
 -   **spec.authToken**: The name of a secret inside of the Kubernetes namespace that the BitwardenSecrets object is being deployed into that contains the Secrets Manager machine account authorization token being used to access secrets.
--   **spec.useSecretNames** (optional): When set to `true`, uses secret names from Bitwarden Secrets Manager as Kubernetes secret keys instead of UUIDs. Default: `false` (uses UUIDs for backward compatibility).
+-   **spec.useSecretNames** (optional): When set to `true`, uses secret names from Bitwarden Secrets Manager as Kubernetes secret keys instead of UUIDs. Default: `false`.
 
 #### Secret Key Naming
 
-By default, secrets are created with the Secrets Manager secret UUID used as the key. This ensures backward compatibility and handles cases where secret names may not be unique or POSIX-compliant.
+By default, secrets are created with the Secrets Manager secret UUID used as the key.
 
-**Option 1: Use Secret Names (Recommended for new deployments)**
+**Option 1: Use Secret Names**
 
 Set `useSecretNames: true` to use the secret names from Bitwarden as Kubernetes secret keys:
 
@@ -113,7 +113,7 @@ When enabled:
 - Secret names from Bitwarden Secrets Manager will be used as Kubernetes secret keys
 - Secret names must be POSIX-compliant (start with letter or underscore, contain only alphanumeric and underscore characters)
 - Secret names must be unique across all accessible secrets
-- Validation errors will prevent secret synchronization with detailed error messages
+- Validation errors will prevent secret synchronization with error messages
 
 Example result:
 ```yaml

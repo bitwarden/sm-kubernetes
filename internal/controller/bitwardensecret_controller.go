@@ -329,7 +329,7 @@ func (r *BitwardenSecretReconciler) PullSecretManagerSecretDeltas(logger logr.Lo
 
 	smSecretVals := smSecretResponse.Secrets
 
-	// Legacy mode: Use UUIDs as keys (default behavior for backward compatibility)
+	// Legacy mode: Use UUIDs as keys
 	if !useSecretNames {
 		for _, smSecretVal := range smSecretVals {
 			secrets[smSecretVal.ID] = []byte(smSecretVal.Value)
