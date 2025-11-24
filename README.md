@@ -111,9 +111,13 @@ spec:
 
 When enabled:
 - Secret names from Bitwarden Secrets Manager will be used as Kubernetes secret keys
-- Secret names must be POSIX-compliant (start with letter or underscore, contain only alphanumeric and underscore characters)
-- Secret names must be unique across all accessible secrets
-- Validation errors will prevent secret synchronization with error messages
+- Secret names should be POSIX-compliant for best environment variable compatibility:
+  - Should start with a letter (`a-z`, `A-Z`) or underscore (`_`)
+  - Should contain only letters, digits (`0-9`), and underscores (`_`)
+  - Warnings will be logged for non-compliant names (e.g., names with dashes, dots, or starting with digits)
+- Secret names **must be unique** across all accessible secrets (duplicates will cause sync failure)
+
+**Note:** While Kubernetes accepts various characters in Secret keys, the operator warns about non-POSIX-compliant names that may not work optimally as environment variables. The secrets will still sync, but you may encounter issues when using them in certain contexts.
 
 Example result:
 ```yaml

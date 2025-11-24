@@ -340,20 +340,17 @@ func (r *BitwardenSecretReconciler) PullSecretManagerSecretDeltas(logger logr.Lo
 
 	// New mode: Use secret names with validation and duplicate detection
 	seenKeys := make(map[string][]string) // Track duplicates: key -> []secretIDs
-	var invalidKeys []string
 
-	// First pass: validate and detect duplicates
+	// First pass: validate POSIX compliance (warn) and detect duplicates (error)
 	for _, smSecretVal := range smSecretVals {
 		secretKey := smSecretVal.Key
 
 		// Validate POSIX compliance
 		if err := ValidateSecretKeyName(secretKey); err != nil {
-			logger.Error(err, "Invalid secret key name",
+			logger.Info("Secret name is not POSIX-compliant and may not work as an environment variable",
 				"secretId", smSecretVal.ID,
-				"secretKey", secretKey)
-			invalidKeys = append(invalidKeys,
-				fmt.Sprintf("%s (ID: %s): %v", secretKey, smSecretVal.ID, err))
-			continue
+				"secretKey", secretKey,
+				"warning", err.Error())
 		}
 
 		// Track for duplicate detection
@@ -369,27 +366,13 @@ func (r *BitwardenSecretReconciler) PullSecretManagerSecretDeltas(logger logr.Lo
 		}
 	}
 
-	// Fail if validation or duplicate errors found
-	if len(invalidKeys) > 0 || len(duplicates) > 0 {
-		var errMsg string
-
-		if len(invalidKeys) > 0 {
-			errMsg += "Invalid secret key names found:\n"
-			for _, invalid := range invalidKeys {
-				errMsg += fmt.Sprintf("  - %s\n", invalid)
-			}
+	// Fail if duplicates found
+	if len(duplicates) > 0 {
+		errMsg := "Duplicate secret key names detected:\n"
+		for _, dup := range duplicates {
+			errMsg += fmt.Sprintf("  - %s\n", dup)
 		}
-
-		if len(duplicates) > 0 {
-			if len(invalidKeys) > 0 {
-				errMsg += "\n"
-			}
-			errMsg += "Duplicate secret key names detected:\n"
-			for _, dup := range duplicates {
-				errMsg += fmt.Sprintf("  - %s\n", dup)
-			}
-			errMsg += "\nEach secret must have a unique name. Please rename the conflicting secrets in Secrets Manager."
-		}
+		errMsg += "\nMultiple secrets with the same name. Use unique names for secrets or disable useSecretNames."
 
 		defer bitwardenClient.Close()
 		return false, nil, fmt.Errorf(errMsg)

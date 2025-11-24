@@ -80,7 +80,7 @@ func (f *TestFixture) setup(t *testing.T, runner *EnvTestRunner) {
 	for secretCount := range ExpectedNumOfSecrets {
 		identifier := sdk.SecretIdentifierResponse{
 			ID:  uuid.NewString(),
-			Key: fmt.Sprintf("secret_%d", secretCount), // Use realistic POSIX-compliant secret name
+			Key: fmt.Sprintf("secret_%d", secretCount), // Use secret name 
 		}
 
 		//build a map mapping each Identifier to an human readable name based on index

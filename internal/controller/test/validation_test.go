@@ -120,23 +120,33 @@ var _ = Describe("Secret Name Validation Tests", Ordered, func() {
 			_, err := fixture.CreateDefaultAuthSecret(namespace)
 			Expect(err).NotTo(HaveOccurred())
 
-			// Create BitwardenSecret with useSecretNames enabled
-			bwSecret, err := fixture.CreateBitwardenSecret(
-				testutils.BitwardenSecretName,
-				namespace,
-				fixture.OrgId,
-				testutils.SynchronizedSecretName,
-				testutils.AuthSecretName,
-				testutils.AuthSecretKey,
-				[]operatorsv1.SecretMap{}, // No mapping needed
-				false,                     // onlyMappedSecrets = false
-			)
+			// Create BitwardenSecret directly with useSecretNames enabled
+			bwSecret := &operatorsv1.BitwardenSecret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      testutils.BitwardenSecretName,
+					Namespace: namespace,
+				},
+				Spec: operatorsv1.BitwardenSecretSpec{
+					AuthToken: operatorsv1.AuthToken{
+						SecretName: testutils.AuthSecretName,
+						SecretKey:  testutils.AuthSecretKey,
+					},
+					SecretName:        testutils.SynchronizedSecretName,
+					OrganizationId:    fixture.OrgId,
+					SecretMap:         []operatorsv1.SecretMap{},
+					OnlyMappedSecrets: false,
+					UseSecretNames:    true, // Enable name-based mode from the start
+				},
+			}
+			err = fixture.K8sClient.Create(fixture.Ctx, bwSecret)
 			Expect(err).NotTo(HaveOccurred())
 
-			// Enable useSecretNames
-			bwSecret.Spec.UseSecretNames = true
-			err = fixture.K8sClient.Update(fixture.Ctx, bwSecret)
-			Expect(err).NotTo(HaveOccurred())
+			// Wait for BitwardenSecret to be created
+			Eventually(func(g Gomega) {
+				fetched := &operatorsv1.BitwardenSecret{}
+				err := fixture.K8sClient.Get(fixture.Ctx, types.NamespacedName{Name: testutils.BitwardenSecretName, Namespace: namespace}, fetched)
+				g.Expect(err).NotTo(HaveOccurred())
+			}).WithTimeout(10 * time.Second).WithPolling(100 * time.Millisecond).Should(Succeed())
 
 			// Trigger reconciliation
 			req := reconcile.Request{NamespacedName: types.NamespacedName{Name: testutils.BitwardenSecretName, Namespace: namespace}}
@@ -157,7 +167,7 @@ var _ = Describe("Secret Name Validation Tests", Ordered, func() {
 			Expect(string(k8sSecret.Data["API_KEY"])).To(Equal("api-key-value"))
 		})
 
-		It("should fail with invalid secret names", func() {
+		It("should warn but succeed with non-POSIX secret names", func() {
 			// Create mock response with invalid secret names
 			invalidSecretsData := []sdk.SecretResponse{
 				{
@@ -185,28 +195,49 @@ var _ = Describe("Secret Name Validation Tests", Ordered, func() {
 			_, err := fixture.CreateDefaultAuthSecret(namespace)
 			Expect(err).NotTo(HaveOccurred())
 
-			// Create BitwardenSecret with useSecretNames enabled
-			bwSecret, err := fixture.CreateBitwardenSecret(
-				testutils.BitwardenSecretName,
-				namespace,
-				fixture.OrgId,
-				testutils.SynchronizedSecretName,
-				testutils.AuthSecretName,
-				testutils.AuthSecretKey,
-				[]operatorsv1.SecretMap{},
-				false,
-			)
+			// Create BitwardenSecret directly with useSecretNames enabled
+			bwSecret := &operatorsv1.BitwardenSecret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      testutils.BitwardenSecretName,
+					Namespace: namespace,
+				},
+				Spec: operatorsv1.BitwardenSecretSpec{
+					AuthToken: operatorsv1.AuthToken{
+						SecretName: testutils.AuthSecretName,
+						SecretKey:  testutils.AuthSecretKey,
+					},
+					SecretName:        testutils.SynchronizedSecretName,
+					OrganizationId:    fixture.OrgId,
+					SecretMap:         []operatorsv1.SecretMap{},
+					OnlyMappedSecrets: false,
+					UseSecretNames:    true, // Enable name-based mode from the start
+				},
+			}
+			err = fixture.K8sClient.Create(fixture.Ctx, bwSecret)
 			Expect(err).NotTo(HaveOccurred())
 
-			bwSecret.Spec.UseSecretNames = true
-			err = fixture.K8sClient.Update(fixture.Ctx, bwSecret)
-			Expect(err).NotTo(HaveOccurred())
+			// Wait for BitwardenSecret to be created
+			Eventually(func(g Gomega) {
+				fetched := &operatorsv1.BitwardenSecret{}
+				err := fixture.K8sClient.Get(fixture.Ctx, types.NamespacedName{Name: testutils.BitwardenSecretName, Namespace: namespace}, fetched)
+				g.Expect(err).NotTo(HaveOccurred())
+			}).WithTimeout(10 * time.Second).WithPolling(100 * time.Millisecond).Should(Succeed())
 
-			// Trigger reconciliation - should fail
+			// Trigger reconciliation - should succeed with warnings
 			req := reconcile.Request{NamespacedName: types.NamespacedName{Name: testutils.BitwardenSecretName, Namespace: namespace}}
 			_, err = fixture.Reconciler.Reconcile(fixture.Ctx, req)
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("Invalid secret key names found"))
+			Expect(err).NotTo(HaveOccurred())
+
+			// Verify K8s secret was created with non-POSIX keys (warnings logged but sync succeeded)
+			k8sSecret := &corev1.Secret{}
+			err = fixture.K8sClient.Get(fixture.Ctx,
+				types.NamespacedName{Name: testutils.SynchronizedSecretName, Namespace: namespace},
+				k8sSecret)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Verify keys are present even though they're not POSIX-compliant
+			Expect(k8sSecret.Data).To(HaveKey("123-invalid"))
+			Expect(k8sSecret.Data).To(HaveKey("my-secret"))
 		})
 
 		It("should fail with duplicate secret names", func() {
