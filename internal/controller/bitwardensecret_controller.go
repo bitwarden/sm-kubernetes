@@ -267,7 +267,7 @@ func (r *BitwardenSecretReconciler) LogCompletion(logger logr.Logger, ctx contex
 }
 
 // ValidateSecretKeyName validates that a secret key name is POSIX-compliant.
-// POSIX-compliant names are required for environment variable compatibility:
+// POSIX-compliant names are recommended for maximum compatibility:
 // - Must start with a letter (a-z, A-Z) or underscore (_)
 // - Can only contain letters, digits (0-9), and underscores
 // - Cannot be empty
@@ -329,7 +329,7 @@ func (r *BitwardenSecretReconciler) PullSecretManagerSecretDeltas(logger logr.Lo
 
 	smSecretVals := smSecretResponse.Secrets
 
-	// Legacy mode: Use UUIDs as keys
+	// Use UUIDs as keys
 	if !useSecretNames {
 		for _, smSecretVal := range smSecretVals {
 			secrets[smSecretVal.ID] = []byte(smSecretVal.Value)
@@ -338,7 +338,7 @@ func (r *BitwardenSecretReconciler) PullSecretManagerSecretDeltas(logger logr.Lo
 		return smSecretResponse.HasChanges, secrets, nil
 	}
 
-	// New mode: Use secret names with validation and duplicate detection
+	// Use secret names with validation and duplicate detection
 	seenKeys := make(map[string][]string) // Track duplicates: key -> []secretIDs
 
 	// First pass: validate POSIX compliance (warn) and detect duplicates (error)
