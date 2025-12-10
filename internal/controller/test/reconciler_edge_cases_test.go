@@ -233,4 +233,88 @@ var _ = Describe("BitwardenSecret Reconciler - Edge Case Tests", Ordered, func()
 		Expect(condition.Status).To(Equal(metav1.ConditionTrue))
 		Expect(updatedBwSecret.Status.LastSuccessfulSyncTime.Time).NotTo(BeZero())
 	})
+
+	It("should successfully sync using secret names (useSecretNames mode)", func() {
+		// Configure mocks with secret names instead of UUIDs
+		secretNamesData := []sdk.SecretResponse{}
+		for i := range 10 {
+			identifier := sdk.SecretIdentifierResponse{
+				ID:             uuid.NewString(),
+				Key:            fmt.Sprintf("secret_%d", i), // Use secret names
+				OrganizationID: fixture.OrgId,
+			}
+			projectId := uuid.NewString()
+			secretNamesData = append(secretNamesData, sdk.SecretResponse{
+				CreationDate:   time.Now().String(),
+				ID:             identifier.ID,
+				Key:            identifier.Key,
+				Note:           uuid.NewString(),
+				OrganizationID: fixture.OrgId,
+				ProjectID:      &projectId,
+				RevisionDate:   time.Now().String(),
+				Value:          uuid.NewString(),
+			})
+		}
+		secretNamesResponse := sdk.SecretsSyncResponse{
+			HasChanges: true,
+			Secrets:    secretNamesData,
+		}
+
+		fixture.SetupDefaultCtrlMocks(false, &secretNamesResponse)
+
+		_, err := fixture.CreateDefaultAuthSecret(namespace)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Create BitwardenSecret with useSecretNames enabled and no SecretMap
+		bwSecret, err := fixture.CreateBitwardenSecret(
+			testutils.BitwardenSecretName,
+			namespace,
+			fixture.OrgId,
+			testutils.SynchronizedSecretName,
+			testutils.AuthSecretName,
+			testutils.AuthSecretKey,
+			[]operatorsv1.SecretMap{}, // No SecretMap needed with useSecretNames
+			false, // OnlyMappedSecrets
+		)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(bwSecret).NotTo(BeNil())
+
+		// Enable useSecretNames
+		bwSecret.Spec.UseSecretNames = true
+		err = fixture.K8sClient.Update(fixture.Ctx, bwSecret)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Trigger reconciliation
+		req := reconcile.Request{NamespacedName: types.NamespacedName{Name: testutils.BitwardenSecretName, Namespace: namespace}}
+		result, err := fixture.Reconciler.Reconcile(fixture.Ctx, req)
+
+		// Verify reconciliation succeeded
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result.RequeueAfter).To(Equal(time.Duration(fixture.Reconciler.RefreshIntervalSeconds) * time.Second))
+
+		Eventually(func(g Gomega) {
+			// Verify created Kubernetes secret
+			createdTargetSecret := &corev1.Secret{}
+			g.Expect(fixture.K8sClient.Get(fixture.Ctx, types.NamespacedName{Name: testutils.SynchronizedSecretName, Namespace: namespace}, createdTargetSecret)).Should(Succeed())
+
+			// Check secret metadata and type
+			g.Expect(createdTargetSecret.Labels[controller.LabelBwSecret]).To(Equal(string(bwSecret.UID)))
+			g.Expect(createdTargetSecret.Type).To(Equal(corev1.SecretTypeOpaque))
+
+			// Verify all secrets are synced using their names as keys
+			g.Expect(len(createdTargetSecret.Data)).To(Equal(10))
+			for i := range 10 {
+				expectedKey := fmt.Sprintf("secret_%d", i)
+				g.Expect(createdTargetSecret.Data).To(HaveKey(expectedKey))
+			}
+
+			// Verify BitwardenSecret status
+			updatedBwSecret := &operatorsv1.BitwardenSecret{}
+			g.Expect(fixture.K8sClient.Get(fixture.Ctx, types.NamespacedName{Name: testutils.BitwardenSecretName, Namespace: namespace}, updatedBwSecret)).Should(Succeed())
+			condition := apimeta.FindStatusCondition(updatedBwSecret.Status.Conditions, "SuccessfulSync")
+			g.Expect(condition).NotTo(BeNil())
+			g.Expect(condition.Status).To(Equal(metav1.ConditionTrue))
+			g.Expect(updatedBwSecret.Status.LastSuccessfulSyncTime.Time).NotTo(BeZero())
+		})
+	})
 })
