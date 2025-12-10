@@ -166,7 +166,7 @@ var _ = Describe("BitwardenSecret Reconciler - Edge Case Tests", Ordered, func()
 		for i := range largeNumOfSecrets {
 			identifier := sdk.SecretIdentifierResponse{
 				ID:             uuid.NewString(),
-				Key:            fmt.Sprintf("secret_%d", i), // Use secret name
+				Key:            uuid.NewString(),
 				OrganizationID: fixture.OrgId,
 			}
 			largeSecretMap = append(largeSecretMap, operatorsv1.SecretMap{
