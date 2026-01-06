@@ -35,6 +35,54 @@ var _ = Describe("Secret Name Validation Tests", Ordered, func() {
 		fixture.Teardown()
 	})
 
+	Describe("ValidateK8sSecretKeyName", func() {
+		It("should accept valid Kubernetes secret key names", func() {
+			validNames := []string{
+				"DATABASE_PASSWORD",
+				"API_KEY",
+				"my-secret",
+				"my.secret",
+				"secret123",
+				"123secret",
+				"MY_SECRET_2",
+				"a",
+				"_",
+				"-",
+				".",
+				"my-secret.key_name",
+			}
+
+			for _, name := range validNames {
+				err := controller.ValidateK8sSecretKeyName(name)
+				Expect(err).NotTo(HaveOccurred(), "Expected '%s' to be valid for K8s", name)
+			}
+		})
+
+		It("should reject empty names", func() {
+			err := controller.ValidateK8sSecretKeyName("")
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("cannot be empty"))
+		})
+
+		It("should reject names with spaces", func() {
+			err := controller.ValidateK8sSecretKeyName("my secret")
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("invalid character"))
+			Expect(err.Error()).To(ContainSubstring("Kubernetes"))
+		})
+
+		It("should reject names with special characters not allowed by Kubernetes", func() {
+			invalidChars := []string{"@", "#", "$", "%", "^", "&", "*", "(", ")", "+", "=", "[", "]", "{", "}", "|", "\\", ";", ":", "'", "\"", "<", ">", ",", "?", "/", " ", "\t", "\n"}
+
+			for _, char := range invalidChars {
+				name := "secret" + char + "name"
+				err := controller.ValidateK8sSecretKeyName(name)
+				Expect(err).To(HaveOccurred(), "Expected '%s' to be invalid for K8s", name)
+				Expect(err.Error()).To(ContainSubstring("invalid character"))
+			}
+		})
+	})
+
 	Describe("ValidateSecretKeyName", func() {
 		It("should accept valid POSIX-compliant names", func() {
 			validNames := []string{
@@ -238,6 +286,70 @@ var _ = Describe("Secret Name Validation Tests", Ordered, func() {
 			// Verify keys are present even though they're not POSIX-compliant
 			Expect(k8sSecret.Data).To(HaveKey("123-invalid"))
 			Expect(k8sSecret.Data).To(HaveKey("my-secret"))
+		})
+
+		It("should fail with Kubernetes-invalid secret names", func() {
+			// Create mock response with secret names that violate Kubernetes rules
+			invalidSecretsData := []sdk.SecretResponse{
+				{
+					CreationDate:   time.Now().String(),
+					ID:             uuid.NewString(),
+					Key:            "This is an invalid keyname", // Contains spaces - K8s rejects
+					Value:          "some-value",
+					OrganizationID: fixture.OrgId,
+				},
+				{
+					CreationDate:   time.Now().String(),
+					ID:             uuid.NewString(),
+					Key:            "valid_secret",
+					Value:          "another-value",
+					OrganizationID: fixture.OrgId,
+				},
+			}
+			invalidSecretsResponse := sdk.SecretsSyncResponse{
+				HasChanges: true,
+				Secrets:    invalidSecretsData,
+			}
+
+			fixture.SetupDefaultCtrlMocks(false, &invalidSecretsResponse)
+
+			_, err := fixture.CreateDefaultAuthSecret(namespace)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Create BitwardenSecret directly with useSecretNames enabled
+			bwSecret := &operatorsv1.BitwardenSecret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      testutils.BitwardenSecretName,
+					Namespace: namespace,
+				},
+				Spec: operatorsv1.BitwardenSecretSpec{
+					AuthToken: operatorsv1.AuthToken{
+						SecretName: testutils.AuthSecretName,
+						SecretKey:  testutils.AuthSecretKey,
+					},
+					SecretName:        testutils.SynchronizedSecretName,
+					OrganizationId:    fixture.OrgId,
+					SecretMap:         []operatorsv1.SecretMap{},
+					OnlyMappedSecrets: false,
+					UseSecretNames:    true,
+				},
+			}
+			err = fixture.K8sClient.Create(fixture.Ctx, bwSecret)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Wait for BitwardenSecret to be created
+			Eventually(func(g Gomega) {
+				fetched := &operatorsv1.BitwardenSecret{}
+				err := fixture.K8sClient.Get(fixture.Ctx, types.NamespacedName{Name: testutils.BitwardenSecretName, Namespace: namespace}, fetched)
+				g.Expect(err).NotTo(HaveOccurred())
+			}).WithTimeout(10 * time.Second).WithPolling(100 * time.Millisecond).Should(Succeed())
+
+			// Trigger reconciliation - should fail due to K8s-invalid name
+			req := reconcile.Request{NamespacedName: types.NamespacedName{Name: testutils.BitwardenSecretName, Namespace: namespace}}
+			_, err = fixture.Reconciler.Reconcile(fixture.Ctx, req)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("Secret key names invalid for Kubernetes"))
+			Expect(err.Error()).To(ContainSubstring("This is an invalid keyname"))
 		})
 
 		It("should fail with duplicate secret names", func() {

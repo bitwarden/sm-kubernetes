@@ -266,8 +266,30 @@ func (r *BitwardenSecretReconciler) LogCompletion(logger logr.Logger, ctx contex
 	return nil
 }
 
+// ValidateK8sSecretKeyName validates that a secret key name conforms to Kubernetes requirements.
+// Kubernetes secret data keys must match the regex [-._a-zA-Z0-9]+
+// See: https://kubernetes.io/docs/concepts/configuration/secret/#restriction-names-data
+func ValidateK8sSecretKeyName(key string) error {
+	if key == "" {
+		return fmt.Errorf("secret key cannot be empty")
+	}
+
+	for i, char := range key {
+		if !((char >= 'a' && char <= 'z') ||
+			(char >= 'A' && char <= 'Z') ||
+			(char >= '0' && char <= '9') ||
+			char == '-' ||
+			char == '_' ||
+			char == '.') {
+			return fmt.Errorf("secret key '%s' contains invalid character '%c' at position %d (Kubernetes requires alphanumeric, '-', '_', or '.')", key, char, i)
+		}
+	}
+
+	return nil
+}
+
 // ValidateSecretKeyName validates that a secret key name is POSIX-compliant.
-// POSIX-compliant names are recommended for maximum compatibility:
+// POSIX-compliant names are recommended for maximum compatibility with environment variables:
 // - Must start with a letter (a-z, A-Z) or underscore (_)
 // - Can only contain letters, digits (0-9), and underscores
 // - Cannot be empty
@@ -340,21 +362,41 @@ func (r *BitwardenSecretReconciler) PullSecretManagerSecretDeltas(logger logr.Lo
 
 	// Use secret names with validation and duplicate detection
 	seenKeys := make(map[string][]string) // Track duplicates: key -> []secretIDs
+	var k8sInvalidKeys []string
 
-	// First pass: validate POSIX compliance (warn) and detect duplicates (error)
+	// First pass: validate K8s compliance (error), POSIX compliance (warn), and detect duplicates (error)
 	for _, smSecretVal := range smSecretVals {
 		secretKey := smSecretVal.Key
 
-		// Validate POSIX compliance
-		if err := ValidateSecretKeyName(secretKey); err != nil {
-			logger.Info("Secret name is not POSIX-compliant and may not work as an environment variable",
-				"secretId", smSecretVal.ID,
-				"secretKey", secretKey,
-				"warning", err.Error())
+		// Validate Kubernetes compliance
+		if err := ValidateK8sSecretKeyName(secretKey); err != nil {
+			k8sInvalidKeys = append(k8sInvalidKeys,
+				fmt.Sprintf("'%s' (ID: %s): %s", secretKey, smSecretVal.ID, err.Error()))
+		} else {
+			// Only check POSIX compliance if K8s validation passed
+			// Validate POSIX compliance - this is a soft warning for env var compatibility
+			if err := ValidateSecretKeyName(secretKey); err != nil {
+				logger.Info("Secret name is not POSIX-compliant and may not work as an environment variable",
+					"secretId", smSecretVal.ID,
+					"secretKey", secretKey,
+					"warning", err.Error())
+			}
 		}
 
 		// Track for duplicate detection
 		seenKeys[secretKey] = append(seenKeys[secretKey], smSecretVal.ID)
+	}
+
+	// Fail if any keys are invalid for Kubernetes
+	if len(k8sInvalidKeys) > 0 {
+		errMsg := "Secret key names invalid for Kubernetes:\n"
+		for _, key := range k8sInvalidKeys {
+			errMsg += fmt.Sprintf("  - %s\n", key)
+		}
+		errMsg += "\nKubernetes secret data keys must consist of alphanumeric characters, '-', '_', or '.'"
+
+		defer bitwardenClient.Close()
+		return false, nil, fmt.Errorf(errMsg)
 	}
 
 	// Check for duplicates
