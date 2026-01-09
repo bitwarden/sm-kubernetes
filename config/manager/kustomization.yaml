@@ -5,4 +5,4 @@ kind: Kustomization
 images:
 - name: controller
   newName: localhost/sm-operator
-  newTag: 0.0.1-Beta
+  newTag: 1.0.0
