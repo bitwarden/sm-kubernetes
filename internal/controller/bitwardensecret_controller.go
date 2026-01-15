@@ -447,15 +447,16 @@ func ApplySecretMap(secrets map[string][]byte, bwSecret *operatorsv1.BitwardenSe
 	k8sSecret.Data = make(map[string][]byte)
 
 	//If we are doing a straight up synch with no map, dump them across and return
-	if !bwSecret.Spec.OnlyMappedSecrets && len(bwSecret.Spec.SecretMap) == 0 {
+	//useSecretNames implies onlyMappedSecrets=false when no SecretMap is provided
+	if (!bwSecret.Spec.OnlyMappedSecrets || bwSecret.Spec.UseSecretNames) && len(bwSecret.Spec.SecretMap) == 0 {
 		k8sSecret.Data = secrets
 		return
 	}
 
 	for key, secret := range secrets {
 		mapping, isThere := FindSecretMapByBwSecretId(&bwSecret.Spec, key) //see if this particular secret is in the map
-		if bwSecret.Spec.OnlyMappedSecrets && !isThere {
-			continue //Not in map and we're only synching mapped secrets, so move on.
+		if bwSecret.Spec.OnlyMappedSecrets && !bwSecret.Spec.UseSecretNames && !isThere {
+			continue //Not in map and we're only synching mapped secrets (without useSecretNames), so move on.
 		}
 
 		targetKey := key //defaulting to BwSecretId
