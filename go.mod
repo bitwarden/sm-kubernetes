@@ -5,8 +5,8 @@ go 1.25.0
 toolchain go1.25.5
 
 require (
-	github.com/bitwarden/sdk-go v0.1.1
-	github.com/go-logr/logr v1.4.3
+	github.com/bitwarden/sdk-go v1.0.2
+	github.com/go-logr/logr v1.4.2
 	github.com/google/uuid v1.6.0
 	github.com/onsi/ginkgo/v2 v2.27.4
 	github.com/onsi/gomega v1.39.0
