@@ -175,13 +175,13 @@ var _ = Describe("BitwardenSecret Reconciler - Edge Case Tests", Ordered, func()
 			})
 			projectId := uuid.NewString()
 			largeSecretsData = append(largeSecretsData, sdk.SecretResponse{
-				CreationDate:   time.Now().String(),
+				CreationDate:   time.Now(),
 				ID:             identifier.ID,
 				Key:            identifier.Key,
 				Note:           uuid.NewString(),
 				OrganizationID: fixture.OrgId,
 				ProjectID:      &projectId,
-				RevisionDate:   time.Now().String(),
+				RevisionDate:   time.Now(),
 				Value:          uuid.NewString(),
 			})
 		}
