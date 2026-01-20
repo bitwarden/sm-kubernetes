@@ -1,6 +1,6 @@
 {
   "name": "BW k8s Operator",
-  "image": "mcr.microsoft.com/devcontainers/go:1.23",
+  "image": "mcr.microsoft.com/devcontainers/go:1.25",
   "runArgs": ["--network=host"], // needed for kind
   "postCreateCommand": "sudo .devcontainer/postCreateCommand.sh",
   "customizations": {
@@ -15,6 +15,7 @@
   },
   "features": {
     "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {
+      "moby": false,
       "runArgs": [
         "--privileged"
       ]
