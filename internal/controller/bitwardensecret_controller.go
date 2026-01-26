@@ -90,9 +90,15 @@ func (r *BitwardenSecretReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		return ctrl.Result{RequeueAfter: time.Duration(r.RefreshIntervalSeconds) * time.Second}, logErr
 	}
 
+	// Validate that useSecretNames and onlyMappedSecrets are not both enabled
+	if bwSecret.Spec.UseSecretNames && bwSecret.Spec.OnlyMappedSecrets {
+		err := fmt.Errorf("useSecretNames and onlyMappedSecrets cannot both be enabled; these options are mutually exclusive")
+		logErr := r.LogError(logger, ctx, bwSecret, err, "Invalid BitwardenSecret configuration")
+		return ctrl.Result{}, logErr
+	}
+
 	lastSync := bwSecret.Status.LastSuccessfulSyncTime
 
-	// Reconcile was queued by last sync time status update on the BitwardenSecret.  We will ignore it.
 	if !lastSync.IsZero() && time.Now().UTC().Before(lastSync.Time.Add(time.Duration(r.RefreshIntervalSeconds)*time.Second)) {
 		return ctrl.Result{}, nil
 	}
@@ -229,6 +235,15 @@ func (r *BitwardenSecretReconciler) LogWarning(logger logr.Logger, ctx context.C
 func (r *BitwardenSecretReconciler) LogError(logger logr.Logger, ctx context.Context, bwSecret *operatorsv1.BitwardenSecret, err error, message string) error {
 	logger.Error(err, message)
 
+	// Re-fetch to get the latest version before status update to avoid conflict errors
+	if fetchErr := r.Get(ctx, types.NamespacedName{
+		Name:      bwSecret.Name,
+		Namespace: bwSecret.Namespace,
+	}, bwSecret); fetchErr != nil {
+		logger.Error(fetchErr, "Failed to re-fetch BitwardenSecret before status update")
+		return fetchErr
+	}
+
 	errorCondition := metav1.Condition{
 		Status:  metav1.ConditionFalse,
 		Reason:  "ReconciliationFailed",
@@ -247,6 +262,15 @@ func (r *BitwardenSecretReconciler) LogError(logger logr.Logger, ctx context.Con
 
 func (r *BitwardenSecretReconciler) LogCompletion(logger logr.Logger, ctx context.Context, bwSecret *operatorsv1.BitwardenSecret, message string) error {
 	logger.Info(message)
+
+	// Re-fetch to get the latest version before status update to avoid conflict errors
+	if err := r.Get(ctx, types.NamespacedName{
+		Name:      bwSecret.Name,
+		Namespace: bwSecret.Namespace,
+	}, bwSecret); err != nil {
+		logger.Error(err, "Failed to re-fetch BitwardenSecret before status update")
+		return err
+	}
 
 	completeCondition := metav1.Condition{
 		Status:  metav1.ConditionTrue,

@@ -234,6 +234,63 @@ var _ = Describe("BitwardenSecret Reconciler - Edge Case Tests", Ordered, func()
 		Expect(updatedBwSecret.Status.LastSuccessfulSyncTime.Time).NotTo(BeZero())
 	})
 
+	It("should fail when useSecretNames and onlyMappedSecrets are both enabled", func() {
+		// Configure mocks - though they shouldn't be called since validation fails first
+		fixture.SetupDefaultCtrlMocks(false, nil)
+
+		_, err := fixture.CreateDefaultAuthSecret(namespace)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Create BitwardenSecret with onlyMappedSecrets=false first
+		bwSecret, err := fixture.CreateBitwardenSecret(
+			testutils.BitwardenSecretName,
+			namespace,
+			fixture.OrgId,
+			testutils.SynchronizedSecretName,
+			testutils.AuthSecretName,
+			testutils.AuthSecretKey,
+			[]operatorsv1.SecretMap{},
+			false, // OnlyMappedSecrets - start with false
+		)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(bwSecret).NotTo(BeNil())
+
+		// Now update to enable both useSecretNames and onlyMappedSecrets
+		bwSecret.Spec.UseSecretNames = true
+		bwSecret.Spec.OnlyMappedSecrets = true
+		err = fixture.K8sClient.Update(fixture.Ctx, bwSecret)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Wait for cache to sync the update
+		Eventually(func(g Gomega) {
+			fetched := &operatorsv1.BitwardenSecret{}
+			g.Expect(fixture.K8sClient.Get(fixture.Ctx, types.NamespacedName{
+				Name:      testutils.BitwardenSecretName,
+				Namespace: namespace,
+			}, fetched)).Should(Succeed())
+			g.Expect(fetched.Spec.UseSecretNames).To(BeTrue())
+			g.Expect(fetched.Spec.OnlyMappedSecrets).To(BeTrue())
+		}).WithTimeout(5 * time.Second).WithPolling(100 * time.Millisecond).Should(Succeed())
+
+		// Trigger reconciliation
+		req := reconcile.Request{NamespacedName: types.NamespacedName{Name: testutils.BitwardenSecretName, Namespace: namespace}}
+		_, err = fixture.Reconciler.Reconcile(fixture.Ctx, req)
+
+		// Verify reconciliation failed with the mutual exclusivity error
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("useSecretNames and onlyMappedSecrets cannot both be enabled"))
+
+		// Verify BitwardenSecret status has FailedSync condition
+		Eventually(func(g Gomega) {
+			updatedBwSecret := &operatorsv1.BitwardenSecret{}
+			g.Expect(fixture.K8sClient.Get(fixture.Ctx, types.NamespacedName{Name: testutils.BitwardenSecretName, Namespace: namespace}, updatedBwSecret)).Should(Succeed())
+			condition := apimeta.FindStatusCondition(updatedBwSecret.Status.Conditions, "FailedSync")
+			g.Expect(condition).NotTo(BeNil())
+			g.Expect(condition.Status).To(Equal(metav1.ConditionFalse))
+			g.Expect(condition.Message).To(ContainSubstring("mutually exclusive"))
+		})
+	})
+
 	It("should successfully sync using secret names (useSecretNames mode)", func() {
 		// Configure mocks with secret names instead of UUIDs
 		secretNamesData := []sdk.SecretResponse{}
@@ -283,6 +340,16 @@ var _ = Describe("BitwardenSecret Reconciler - Edge Case Tests", Ordered, func()
 		bwSecret.Spec.UseSecretNames = true
 		err = fixture.K8sClient.Update(fixture.Ctx, bwSecret)
 		Expect(err).NotTo(HaveOccurred())
+
+		// Wait for cache to sync the update
+		Eventually(func(g Gomega) {
+			fetched := &operatorsv1.BitwardenSecret{}
+			g.Expect(fixture.K8sClient.Get(fixture.Ctx, types.NamespacedName{
+				Name:      testutils.BitwardenSecretName,
+				Namespace: namespace,
+			}, fetched)).Should(Succeed())
+			g.Expect(fetched.Spec.UseSecretNames).To(BeTrue())
+		}).WithTimeout(5 * time.Second).WithPolling(100 * time.Millisecond).Should(Succeed())
 
 		// Trigger reconciliation
 		req := reconcile.Request{NamespacedName: types.NamespacedName{Name: testutils.BitwardenSecretName, Namespace: namespace}}
