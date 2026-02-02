@@ -94,11 +94,55 @@ Our operator is designed to look for the creation of a custom resource called a 
 -   **spec.organizationId**: The Bitwarden organization ID you are pulling Secrets Manager data from
 -   **spec.secretName**: The name of the Kubernetes secret that will be created and injected with Secrets Manager data.
 -   **spec.authToken**: The name of a secret inside of the Kubernetes namespace that the BitwardenSecrets object is being deployed into that contains the Secrets Manager machine account authorization token being used to access secrets.
+-   **spec.useSecretNames** (optional): When set to `true`, uses secret names from Bitwarden Secrets Manager as Kubernetes secret keys instead of UUIDs. Default: `false`.
 
-Secrets Manager does not guarantee unique secret names across projects, so by default secrets will be created with the Secrets Manager secret UUID used as the key. To make your generated secret easier to use, you can create a map of Bitwarden Secret IDs to Kubernetes secret keys. The generated secret will replace the Bitwarden Secret IDs with the mapped friendly name you provide. Below are the map settings available:
+#### Secret Key Naming
+
+By default, secrets are created with the Secrets Manager secret UUID used as the key.
+
+**Option 1: Use Secret Names**
+
+Set `useSecretNames: true` to use the secret names from Bitwarden as Kubernetes secret keys:
+
+```yaml
+spec:
+  useSecretNames: true
+```
+
+When enabled:
+- Secret names from Bitwarden Secrets Manager will be used as Kubernetes secret keys
+- Secret names should be POSIX-compliant for best environment variable compatibility:
+  - Should start with a letter (`a-z`, `A-Z`) or underscore (`_`)
+  - Should contain only letters, digits (`0-9`), and underscores (`_`)
+  - Warnings will be logged for non-compliant names (e.g., names with dashes, dots, or starting with digits)
+- Secret names **must be unique** across all accessible secrets (duplicates will cause sync failure)
+
+**Note:** While Kubernetes accepts various characters in Secret keys, the operator warns about non-POSIX-compliant names that may not work optimally as environment variables. The secrets will still sync, but you may encounter issues when using them in certain contexts.
+
+Example result:
+```yaml
+Data:
+  DATABASE_PASSWORD: <value>
+  API_KEY: <value>
+  REDIS_URL: <value>
+```
+
+**Option 2: Use UUID Keys with Mapping (Default)**
+
+By default, secrets use UUIDs as keys. To make your generated secret easier to use, you can create a map of Bitwarden Secret IDs to Kubernetes secret keys. The generated secret will replace the Bitwarden Secret IDs with the mapped friendly name you provide. Below are the map settings available:
 
 -   **bwSecretId**: This is the UUID of the secret in Secrets Manager. This can found under the secret name in the Secrets Manager web portal or by using the [Bitwarden Secrets Manager CLI](https://github.com/bitwarden/sdk/releases).
 -   **secretKeyName**: The resulting key inside the Kubernetes secret that replaces the UUID
+
+Example:
+```yaml
+spec:
+  map:
+    - bwSecretId: e30f88bd-9e9c-42ae-83b7-b155012da672
+      secretKeyName: DATABASE_PASSWORD
+    - bwSecretId: 9f66ccaf-998e-4e5d-9294-b155012db579
+      secretKeyName: API_KEY
+```
 
 Note that the custom mapping is made available on the generated secret for informational purposes in the `k8s.bitwarden.com/custom-map` annotation.
 
