@@ -302,13 +302,13 @@ var _ = Describe("BitwardenSecret Reconciler - Edge Case Tests", Ordered, func()
 			}
 			projectId := uuid.NewString()
 			secretNamesData = append(secretNamesData, sdk.SecretResponse{
-				CreationDate:   time.Now().String(),
+				CreationDate:   time.Now(),
 				ID:             identifier.ID,
 				Key:            identifier.Key,
 				Note:           uuid.NewString(),
 				OrganizationID: fixture.OrgId,
 				ProjectID:      &projectId,
-				RevisionDate:   time.Now().String(),
+				RevisionDate:   time.Now(),
 				Value:          uuid.NewString(),
 			})
 		}
@@ -331,7 +331,7 @@ var _ = Describe("BitwardenSecret Reconciler - Edge Case Tests", Ordered, func()
 			testutils.AuthSecretName,
 			testutils.AuthSecretKey,
 			[]operatorsv1.SecretMap{}, // No SecretMap needed with useSecretNames
-			false, // OnlyMappedSecrets
+			false,                     // OnlyMappedSecrets
 		)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(bwSecret).NotTo(BeNil())
