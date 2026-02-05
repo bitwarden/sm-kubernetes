@@ -89,13 +89,13 @@ func (f *TestFixture) setup(t *testing.T, runner *EnvTestRunner) {
 		projectId := uuid.NewString()
 
 		secretsData = append(secretsData, sdk.SecretResponse{
-			CreationDate:   time.Now().String(),
+			CreationDate:   time.Now(),
 			ID:             identifier.ID,
 			Key:            identifier.Key,
 			Note:           uuid.NewString(),
 			OrganizationID: f.OrgId,
 			ProjectID:      &projectId,
-			RevisionDate:   time.Now().String(),
+			RevisionDate:   time.Now(),
 			Value:          uuid.NewString(),
 		})
 	}

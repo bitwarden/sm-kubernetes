@@ -144,14 +144,14 @@ var _ = Describe("Secret Name Validation Tests", Ordered, func() {
 			// Create mock response with valid secret names
 			validSecretsData := []sdk.SecretResponse{
 				{
-					CreationDate:   time.Now().String(),
+					CreationDate:   time.Now(),
 					ID:             uuid.NewString(),
 					Key:            "DATABASE_PASSWORD",
 					Value:          "db-secret-value",
 					OrganizationID: fixture.OrgId,
 				},
 				{
-					CreationDate:   time.Now().String(),
+					CreationDate:   time.Now(),
 					ID:             uuid.NewString(),
 					Key:            "API_KEY",
 					Value:          "api-key-value",
@@ -219,14 +219,14 @@ var _ = Describe("Secret Name Validation Tests", Ordered, func() {
 			// Create mock response with invalid secret names
 			invalidSecretsData := []sdk.SecretResponse{
 				{
-					CreationDate:   time.Now().String(),
+					CreationDate:   time.Now(),
 					ID:             uuid.NewString(),
 					Key:            "123-invalid", // Starts with digit
 					Value:          "some-value",
 					OrganizationID: fixture.OrgId,
 				},
 				{
-					CreationDate:   time.Now().String(),
+					CreationDate:   time.Now(),
 					ID:             uuid.NewString(),
 					Key:            "my-secret", // Contains hyphen
 					Value:          "another-value",
@@ -292,14 +292,14 @@ var _ = Describe("Secret Name Validation Tests", Ordered, func() {
 			// Create mock response with secret names that violate Kubernetes rules
 			invalidSecretsData := []sdk.SecretResponse{
 				{
-					CreationDate:   time.Now().String(),
+					CreationDate:   time.Now(),
 					ID:             uuid.NewString(),
 					Key:            "This is an invalid keyname", // Contains spaces - K8s rejects
 					Value:          "some-value",
 					OrganizationID: fixture.OrgId,
 				},
 				{
-					CreationDate:   time.Now().String(),
+					CreationDate:   time.Now(),
 					ID:             uuid.NewString(),
 					Key:            "valid_secret",
 					Value:          "another-value",
@@ -358,14 +358,14 @@ var _ = Describe("Secret Name Validation Tests", Ordered, func() {
 			duplicateId2 := uuid.NewString()
 			duplicateSecretsData := []sdk.SecretResponse{
 				{
-					CreationDate:   time.Now().String(),
+					CreationDate:   time.Now(),
 					ID:             duplicateId1,
 					Key:            "DUPLICATE_NAME",
 					Value:          "value1",
 					OrganizationID: fixture.OrgId,
 				},
 				{
-					CreationDate:   time.Now().String(),
+					CreationDate:   time.Now(),
 					ID:             duplicateId2,
 					Key:            "DUPLICATE_NAME", // Same name as above
 					Value:          "value2",
@@ -453,14 +453,14 @@ var _ = Describe("Secret Name Validation Tests", Ordered, func() {
 			// Create secrets with invalid names that would fail in name mode
 			invalidNameSecretsData := []sdk.SecretResponse{
 				{
-					CreationDate:   time.Now().String(),
+					CreationDate:   time.Now(),
 					ID:             uuid.NewString(),
 					Key:            "123-invalid-name", // Would be invalid in name mode
 					Value:          "value1",
 					OrganizationID: fixture.OrgId,
 				},
 				{
-					CreationDate:   time.Now().String(),
+					CreationDate:   time.Now(),
 					ID:             uuid.NewString(),
 					Key:            "my-secret", // Would be invalid in name mode
 					Value:          "value2",
