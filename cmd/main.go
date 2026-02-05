@@ -194,7 +194,7 @@ func GetSettings() (*string, *string, *string, *int, error) {
 		if err != nil || u.Scheme == "" || u.Host == "" {
 			message := fmt.Sprintf("Bitwarden API URL is not valid.  Value supplied: %s", bwApiUrl)
 			if err == nil {
-				err = fmt.Errorf(message)
+				err = fmt.Errorf("%s", message)
 			}
 
 			setupLog.Error(err, message)
@@ -215,7 +215,7 @@ func GetSettings() (*string, *string, *string, *int, error) {
 		if err != nil || u.Scheme == "" || u.Host == "" {
 			message := fmt.Sprintf("Bitwarden Identity URL is not valid.  Value supplied: %s", identApiUrl)
 			if err == nil {
-				err = fmt.Errorf(message)
+				err = fmt.Errorf("%s", message)
 			}
 
 			setupLog.Error(err, message)

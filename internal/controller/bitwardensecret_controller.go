@@ -23,12 +23,13 @@ package controller
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -79,7 +80,7 @@ func (r *BitwardenSecretReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	if err != nil {
 
 		//Error was due to missing item
-		if errors.IsNotFound(err) {
+		if k8serrors.IsNotFound(err) {
 			logger.Info(fmt.Sprintf("%s/%s was deleted.", req.NamespacedName.Namespace, req.Name))
 			return ctrl.Result{}, err
 		}
@@ -156,7 +157,7 @@ func (r *BitwardenSecretReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		err = r.Get(ctx, namespacedK8sSecret, k8sSecret)
 
 		//Bitwarden secret doesn't exist; need to create it
-		if err != nil && errors.IsNotFound(err) {
+		if err != nil && k8serrors.IsNotFound(err) {
 			k8sSecret = CreateK8sSecret(bwSecret)
 
 			// Set up the controller reference; Handle any error
@@ -420,7 +421,7 @@ func (r *BitwardenSecretReconciler) PullSecretManagerSecretDeltas(logger logr.Lo
 		errMsg += "\nKubernetes secret data keys must consist of alphanumeric characters, '-', '_', or '.'"
 
 		defer bitwardenClient.Close()
-		return false, nil, fmt.Errorf(errMsg)
+		return false, nil, errors.New(errMsg)
 	}
 
 	// Check for duplicates
@@ -441,7 +442,7 @@ func (r *BitwardenSecretReconciler) PullSecretManagerSecretDeltas(logger logr.Lo
 		errMsg += "\nMultiple secrets with the same name. Use unique names for secrets or disable useSecretNames."
 
 		defer bitwardenClient.Close()
-		return false, nil, fmt.Errorf(errMsg)
+		return false, nil, errors.New(errMsg)
 	}
 
 	// Second pass: build the secrets map using names

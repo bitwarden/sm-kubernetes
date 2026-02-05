@@ -20,28 +20,28 @@ Run `make setup` to generate an example `.env` file. If you are using the Dev Co
 
 A Visual Studio Code Dev Container is provided for development purposes, and handles the setup of all of these pre-requisites. It is strongly recommended that you use the Dev Container, especially on Mac and Windows. The only requirements for the Dev Container are:
 
--   [Visual Studio Code](https://code.visualstudio.com/)
--   [Docker](https://www.docker.com/) - Podman is not currently supported with our Dev Container
--   [Visual Studio Code Dev Containers Extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers)
+- [Visual Studio Code](https://code.visualstudio.com/)
+- [Docker](https://www.docker.com/) - Podman is not currently supported with our Dev Container
+- [Visual Studio Code Dev Containers Extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers)
 
 You will need to open Visual Studio Code at the repository root to use the Dev Container.
 
 For manual Linux setups:
 
--   [Go](https://go.dev/dl/) version 1.20 or 1.21
--   [Operator-SDK](https://sdk.operatorframework.io/docs/installation/#install-from-github-release)
--   [musl-gcc](https://wiki.musl-libc.org/getting-started.html)
--   [Make](https://www.gnu.org/software/make/)
--   [Visual Studio Code Go Extension](https://marketplace.visualstudio.com/items?itemName=golang.go)
--   [kubectl](https://kubernetes.io/docs/tasks/tools/)
--   [Docker](https://www.docker.com/) or [Podman](https://podman.io/) or another container engine
--   A [Bitwarden Organization with Secrets Manager](https://bitwarden.com/help/sign-up-for-secrets-manager/). You will need the organization ID GUID for your organization.
--   An [access token](https://bitwarden.com/help/access-tokens/) for a Secrets Manager machine account tied to the projects you want to pull.
--   A [Kind Cluster](https://kind.sigs.k8s.io/docs/user/quick-start/) or other local Kubernetes environment with Kubectl pointed to it as the current context for local development.
+- [Go](https://go.dev/dl/) version 1.20 or 1.21
+- [Operator-SDK](https://sdk.operatorframework.io/docs/installation/#install-from-github-release)
+- [musl-gcc](https://wiki.musl-libc.org/getting-started.html)
+- [Make](https://www.gnu.org/software/make/)
+- [Visual Studio Code Go Extension](https://marketplace.visualstudio.com/items?itemName=golang.go)
+- [kubectl](https://kubernetes.io/docs/tasks/tools/)
+- [Docker](https://www.docker.com/) or [Podman](https://podman.io/) or another container engine
+- A [Bitwarden Organization with Secrets Manager](https://bitwarden.com/help/sign-up-for-secrets-manager/). You will need the organization ID GUID for your organization.
+- An [access token](https://bitwarden.com/help/access-tokens/) for a Secrets Manager machine account tied to the projects you want to pull.
+- A [Kind Cluster](https://kind.sigs.k8s.io/docs/user/quick-start/) or other local Kubernetes environment with Kubectl pointed to it as the current context for local development.
 
 ### Recommended
 
--   [Bitwarden Secrets Manager CLI](https://github.com/bitwarden/sdk/releases)
+- [Bitwarden Secrets Manager CLI](https://github.com/bitwarden/sdk/releases)
 
 ### Development
 
@@ -81,20 +81,20 @@ More information can be found via the [Kubebuilder Documentation](https://book.k
 A `.env` file will be created under this workspace's root directory once the Dev Container is created or `make setup` has been run. The following environment variable settings can
 be updated to change the behavior of the operator:
 
--   **BW_API_URL** - Sets the Bitwarden API URL that the Secrets Manager SDK uses. This is useful for self-host scenarios, as well as hitting European servers
--   **BW_IDENTITY_API_URL** - Sets the Bitwarden Identity service URL that the Secrets Manager SDK uses. This is useful for self-host scenarios, as well as hitting European servers
--   **BW_SECRETS_MANAGER_STATE_PATH** - Sets the base path where Secrets Manager SDK stores its state files
--   **BW_SECRETS_MANAGER_REFRESH_INTERVAL** - Specifies the refresh interval in seconds for syncing secrets between Secrets Manager and K8s secrets. The minimum value is 180.
+- **BW_API_URL** - Sets the Bitwarden API URL that the Secrets Manager SDK uses. This is useful for self-host scenarios, as well as hitting European servers
+- **BW_IDENTITY_API_URL** - Sets the Bitwarden Identity service URL that the Secrets Manager SDK uses. This is useful for self-host scenarios, as well as hitting European servers
+- **BW_SECRETS_MANAGER_STATE_PATH** - Sets the base path where Secrets Manager SDK stores its state files
+- **BW_SECRETS_MANAGER_REFRESH_INTERVAL** - Specifies the refresh interval in seconds for syncing secrets between Secrets Manager and K8s secrets. The minimum value is 180.
 
 ### BitwardenSecret
 
 Our operator is designed to look for the creation of a custom resource called a BitwardenSecret. Think of the BitwardenSecret object as the synchronization settings that will be used by the operator to create and synchronize a Kubernetes secret. This Kubernetes secret will live inside of a namespace and will be injected with the data available to a Secrets Manager machine account. The resulting Kubernetes secret will include all secrets that a specific machine account has access to. The sample manifest ([config/samples/k8s_v1_bitwardensecret.yaml](config/samples/k8s_v1_bitwardensecret.yaml)) gives the basic structure of the BitwardenSecret. The key settings that you will want to update are listed below:
 
--   **metadata.name**: The name of the BitwardenSecret object you are deploying
--   **spec.organizationId**: The Bitwarden organization ID you are pulling Secrets Manager data from
--   **spec.secretName**: The name of the Kubernetes secret that will be created and injected with Secrets Manager data.
--   **spec.authToken**: The name of a secret inside of the Kubernetes namespace that the BitwardenSecrets object is being deployed into that contains the Secrets Manager machine account authorization token being used to access secrets.
--   **spec.useSecretNames** (optional): When set to `true`, uses secret names from Bitwarden Secrets Manager as Kubernetes secret keys instead of UUIDs. Default: `false`.
+- **metadata.name**: The name of the BitwardenSecret object you are deploying
+- **spec.organizationId**: The Bitwarden organization ID you are pulling Secrets Manager data from
+- **spec.secretName**: The name of the Kubernetes secret that will be created and injected with Secrets Manager data.
+- **spec.authToken**: The name of a secret inside of the Kubernetes namespace that the BitwardenSecrets object is being deployed into that contains the Secrets Manager machine account authorization token being used to access secrets.
+- **spec.useSecretNames** (optional): When set to `true`, uses secret names from Bitwarden Secrets Manager as Kubernetes secret keys instead of UUIDs. Default: `false`.
 
 #### Secret Key Naming
 
@@ -106,42 +106,45 @@ Set `useSecretNames: true` to use the secret names from Bitwarden as Kubernetes 
 
 ```yaml
 spec:
-  useSecretNames: true
+    useSecretNames: true
 ```
 
 When enabled:
+
 - Secret names from Bitwarden Secrets Manager will be used as Kubernetes secret keys
 - Secret names should be POSIX-compliant for best environment variable compatibility:
-  - Should start with a letter (`a-z`, `A-Z`) or underscore (`_`)
-  - Should contain only letters, digits (`0-9`), and underscores (`_`)
-  - Warnings will be logged for non-compliant names (e.g., names with dashes, dots, or starting with digits)
+    - Should start with a letter (`a-z`, `A-Z`) or underscore (`_`)
+    - Should contain only letters, digits (`0-9`), and underscores (`_`)
+    - Warnings will be logged for non-compliant names (e.g., names with dashes, dots, or starting with digits)
 - Secret names **must be unique** across all accessible secrets (duplicates will cause sync failure)
 
 **Note:** While Kubernetes accepts various characters in Secret keys, the operator warns about non-POSIX-compliant names that may not work optimally as environment variables. The secrets will still sync, but you may encounter issues when using them in certain contexts.
 
 Example result:
+
 ```yaml
 Data:
-  DATABASE_PASSWORD: <value>
-  API_KEY: <value>
-  REDIS_URL: <value>
+    DATABASE_PASSWORD: <value>
+    API_KEY: <value>
+    REDIS_URL: <value>
 ```
 
 **Option 2: Use UUID Keys with Mapping (Default)**
 
 By default, secrets use UUIDs as keys. To make your generated secret easier to use, you can create a map of Bitwarden Secret IDs to Kubernetes secret keys. The generated secret will replace the Bitwarden Secret IDs with the mapped friendly name you provide. Below are the map settings available:
 
--   **bwSecretId**: This is the UUID of the secret in Secrets Manager. This can found under the secret name in the Secrets Manager web portal or by using the [Bitwarden Secrets Manager CLI](https://github.com/bitwarden/sdk/releases).
--   **secretKeyName**: The resulting key inside the Kubernetes secret that replaces the UUID
+- **bwSecretId**: This is the UUID of the secret in Secrets Manager. This can found under the secret name in the Secrets Manager web portal or by using the [Bitwarden Secrets Manager CLI](https://github.com/bitwarden/sdk/releases).
+- **secretKeyName**: The resulting key inside the Kubernetes secret that replaces the UUID
 
 Example:
+
 ```yaml
 spec:
-  map:
-    - bwSecretId: e30f88bd-9e9c-42ae-83b7-b155012da672
-      secretKeyName: DATABASE_PASSWORD
-    - bwSecretId: 9f66ccaf-998e-4e5d-9294-b155012db579
-      secretKeyName: API_KEY
+    map:
+        - bwSecretId: e30f88bd-9e9c-42ae-83b7-b155012da672
+          secretKeyName: DATABASE_PASSWORD
+        - bwSecretId: 9f66ccaf-998e-4e5d-9294-b155012db579
+          secretKeyName: API_KEY
 ```
 
 Note that the custom mapping is made available on the generated secret for informational purposes in the `k8s.bitwarden.com/custom-map` annotation.
@@ -204,25 +207,22 @@ make undeploy
 
 Unit tests are currently found in the following files:
 
--   internal/controller/suite_test.go
+- internal/controller/suite_test.go
 
--   cmd/suite_test.go
+- cmd/suite_test.go
 
-To run the unit tests, run `make test` from the root directory of this workspace. To debug the unit tests, click on the file you would like to debug. In the `Run and Debug` tab in Visual Studio Code, change the launch configuration from "Debug" to "Test current file", and then press F5. 
+To run the unit tests, run `make test` from the root directory of this workspace. To debug the unit tests, click on the file you would like to debug. In the `Run and Debug` tab in Visual Studio Code, change the launch configuration from "Debug" to "Test current file", and then press F5.
 
-**NOTE: Using the Visual Studio Code "Testing" tab may not work OOB due to VS Code not linking the static binaries correctly.  The solution is to perform the following tasks***
+**NOTE: Using the Visual Studio Code "Testing" tab may not work OOB due to VS Code not linking the static binaries correctly. The solution is to perform the following tasks\***
 
 Update VSCode Settings for Tests:
 
-* Open VSCode settings (Ctrl+, or Cmd+,).
-* Search for go.testFlags.
-* Add the following to the go.testFlags array:
+- Open VSCode settings (Ctrl+, or Cmd+,).
+- Search for go.testFlags.
+- Add the following to the go.testFlags array:
 
 ```json
-
 ["-ldflags=-extldflags=-lm"]
-
 ```
 
 This tells the Go test runner to include the linker flag for all test commands.
-
