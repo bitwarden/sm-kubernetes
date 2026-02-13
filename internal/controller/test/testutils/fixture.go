@@ -20,7 +20,7 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	"github.com/bitwarden/sdk-go"
+	"github.com/bitwarden/sdk-go/v2"
 	operatorsv1 "github.com/bitwarden/sm-kubernetes/api/v1"
 	"github.com/bitwarden/sm-kubernetes/internal/controller"
 	mocks "github.com/bitwarden/sm-kubernetes/internal/controller/test/mocks"
