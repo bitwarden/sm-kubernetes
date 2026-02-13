@@ -1,7 +1,7 @@
 package controller
 
 import (
-	sdk "github.com/bitwarden/sdk-go"
+	sdk "github.com/bitwarden/sdk-go/v2"
 )
 
 type BitwardenClientFactory interface {

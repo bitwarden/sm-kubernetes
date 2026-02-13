@@ -15,7 +15,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/types"
 
-	sdk "github.com/bitwarden/sdk-go"
+	sdk "github.com/bitwarden/sdk-go/v2"
 	operatorsv1 "github.com/bitwarden/sm-kubernetes/api/v1"
 	"github.com/bitwarden/sm-kubernetes/internal/controller"
 	"github.com/bitwarden/sm-kubernetes/internal/controller/test/testutils"
