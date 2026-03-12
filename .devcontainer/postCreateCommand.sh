@@ -16,5 +16,5 @@ BW_API_URL=
 BW_IDENTITY_API_URL=
 
 And run the following to set the Bitwarden access token secret before attempting to create a BitwardenSecret object:
-kubectl create secret generic bw-auth-token -n some-namespace --from-literal=token="$BWS_ACCESS_TOKEN"
+kubectl create secret generic bw-auth-token --namespace some-namespace --from-literal=token="$BWS_ACCESS_TOKEN"
 '
