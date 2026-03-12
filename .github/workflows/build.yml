@@ -132,7 +132,7 @@ jobs:
           make deploy IMG="$IMAGE"
 
           count=0
-          while [[ $(kubectl get pods -n sm-operator-system -l control-plane=controller-manager -o jsonpath="{.items[*].status.containerStatuses[*].ready}") != "true" ]]; do
+          while [[ $(kubectl get pods --namespace sm-operator-system --selector control-plane=controller-manager --output jsonpath="{.items[*].status.containerStatuses[*].ready}") != "true" ]]; do
             sleep 1;
             count=$count+1
             if [[ count -ge 30 ]]; then
@@ -142,10 +142,10 @@ jobs:
 
           #For review purposes
           echo "*****DEPLOYMENTS*****"
-          kubectl get deployments -n sm-operator-system
+          kubectl get deployments --namespace sm-operator-system
 
           echo "*****PODS*****"
-          pods=$(kubectl get pods -n sm-operator-system -l control-plane=controller-manager | grep 2/2)
+          pods=$(kubectl get pods --namespace sm-operator-system --selector control-plane=controller-manager | grep 2/2)
           echo "$pods"
 
           if [[ -z "$pods" ]]; then
