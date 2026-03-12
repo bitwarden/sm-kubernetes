@@ -144,6 +144,11 @@ jobs:
           echo "*****DEPLOYMENTS*****"
           kubectl get deployments --namespace sm-operator-system
 
+          if [[ $(kubectl get deployments --namespace sm-operator-system --output jsonpath="{.items[0].status.readyReplicas}") != "1" ]]; then
+            echo "::warning::Deployment not 1/1 ready, showing logs..."
+            kubectl logs --namespace sm-operator-system --selector control-plane=controller-manager --all-containers
+          fi
+
           echo "*****PODS*****"
           pods=$(kubectl get pods --namespace sm-operator-system --selector control-plane=controller-manager | grep 2/2)
           echo "$pods"
