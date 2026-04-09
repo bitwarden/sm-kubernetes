@@ -84,15 +84,12 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Tag release
-        run: |
-          docker pull "$_IMAGE_NAME:$_MAIN_TAG"
-          docker tag "$_IMAGE_NAME:$_MAIN_TAG" "$_IMAGE_NAME:$_RELEASE_TAG"
-
-      - name: Push release
+      - name: Push release image
         if: ${{ inputs.release_type != 'Dry Run' }}
         run: |
-          docker push "$_IMAGE_NAME:$_RELEASE_TAG"
+          skopeo copy --all \
+            docker://$_IMAGE_NAME:$_MAIN_TAG \
+            docker://$_IMAGE_NAME:$_RELEASE_TAG
 
       - name: Log out of Docker
         run: docker logout ghcr.io
