@@ -135,7 +135,7 @@ func (r *BitwardenSecretReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 
 	//Get the secrets from the Bitwarden API based on lastSync and organizationId
 	//This will also indicate if the Bitwarden secret needs to be refreshed
-	refresh, secrets, err := r.PullSecretManagerSecretDeltas(logger, orgId, authToken, lastSync.Time, bwSecret.Spec.UseSecretNames)
+	refresh, secrets, err := r.PullSecretManagerSecretDeltas(logger, orgId, authToken, lastSync.Time, bwSecret.Spec.UseSecretNames, bwSecret.Spec.ProjectId)
 
 	if err != nil {
 		logErr := r.LogError(logger, ctx, bwSecret, err, fmt.Sprintf("Error pulling Secret Manager secrets from API => API: %s -- Identity: %s -- State: %s -- OrgId: %s ", r.BitwardenClientFactory.GetApiUrl(), r.BitwardenClientFactory.GetIdentityApiUrl(), r.StatePath, orgId))
@@ -347,7 +347,7 @@ func ValidateSecretKeyName(key string) error {
 // This function will determine if any secrets have been updated and return all secrets assigned to the machine account if so.
 // First returned value is a boolean stating if something changed or not.
 // The second returned value is a mapping of secret IDs (or names if useSecretNames is true) and their values from Secrets Manager
-func (r *BitwardenSecretReconciler) PullSecretManagerSecretDeltas(logger logr.Logger, orgId string, authToken string, lastSync time.Time, useSecretNames bool) (bool, map[string][]byte, error) {
+func (r *BitwardenSecretReconciler) PullSecretManagerSecretDeltas(logger logr.Logger, orgId string, authToken string, lastSync time.Time, useSecretNames bool, projectId string) (bool, map[string][]byte, error) {
 	bitwardenClient, err := r.BitwardenClientFactory.GetBitwardenClient()
 	if err != nil {
 		logger.Error(err, "Failed to create client")
@@ -375,6 +375,17 @@ func (r *BitwardenSecretReconciler) PullSecretManagerSecretDeltas(logger logr.Lo
 	}
 
 	smSecretVals := smSecretResponse.Secrets
+
+	// Filter by project ID if specified
+	if projectId != "" {
+		filtered := smSecretVals[:0]
+		for _, s := range smSecretVals {
+			if s.ProjectID != nil && *s.ProjectID == projectId {
+				filtered = append(filtered, s)
+			}
+		}
+		smSecretVals = filtered
+	}
 
 	// Use UUIDs as keys
 	if !useSecretNames {
