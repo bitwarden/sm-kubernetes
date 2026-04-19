@@ -99,9 +99,15 @@ func (r *BitwardenSecretReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	}
 
 	lastSync := bwSecret.Status.LastSuccessfulSyncTime
+	nextSync := lastSync.Time.Add(time.Duration(r.RefreshIntervalSeconds) * time.Second)
 
-	if !lastSync.IsZero() && time.Now().UTC().Before(lastSync.Time.Add(time.Duration(r.RefreshIntervalSeconds)*time.Second)) {
-		return ctrl.Result{}, nil
+	if !lastSync.IsZero() && time.Now().UTC().Before(nextSync) {
+		remaining := time.Until(nextSync)
+		logger.Info(fmt.Sprintf("Skipping sync for %s/%s — last sync was %s, next sync in %s",
+			req.NamespacedName.Namespace, req.Name, lastSync.Time.Format("15:04:05"), remaining.Round(time.Second)))
+		return ctrl.Result{
+			RequeueAfter: remaining,
+		}, nil
 	}
 
 	message := fmt.Sprintf("Syncing  %s/%s", req.NamespacedName.Namespace, req.Name)
