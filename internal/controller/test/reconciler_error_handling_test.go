@@ -1,7 +1,6 @@
 package controller_test
 
 import (
-	"fmt"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -52,9 +51,8 @@ var _ = Describe("BitwardenSecret Reconciler - Error Handling Tests", Ordered, f
 
 		result, err := fixture.Reconciler.Reconcile(fixture.Ctx, req)
 
-		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring(fmt.Sprintf("\"%s\" not found", testutils.BitwardenSecretName)))
-		Expect(result.Requeue).To(BeFalse())
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result).To(Equal(reconcile.Result{}))
 	})
 
 	It("should handle a generic error during BitwardenSecret retrieval", func() {
