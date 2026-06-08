@@ -85,10 +85,10 @@ func (r *BitwardenSecretReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 			return ctrl.Result{}, nil
 		}
 
-		logErr := r.LogError(logger, ctx, bwSecret, err, "Error looking up BitwardenSecret")
+		logger.Error(err, "Error looking up BitwardenSecret", "namespace", req.NamespacedName.Namespace, "name", req.Name)
 
 		//Other lookup error
-		return ctrl.Result{RequeueAfter: time.Duration(r.RefreshIntervalSeconds) * time.Second}, logErr
+		return ctrl.Result{RequeueAfter: time.Duration(r.RefreshIntervalSeconds) * time.Second}, err
 	}
 
 	// Validate that useSecretNames and onlyMappedSecrets are not both enabled
