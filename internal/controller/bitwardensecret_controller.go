@@ -99,6 +99,14 @@ func (r *BitwardenSecretReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	}
 
 	lastSync := bwSecret.Status.LastSuccessfulSyncTime
+
+	// If the K8s Secret doesn't exist, force a full sync so it gets recreated
+	// regardless of whether Bitwarden reports changes since the last sync.
+	existingK8sSecret := &corev1.Secret{}
+	if err := r.Get(ctx, types.NamespacedName{Name: bwSecret.Spec.SecretName, Namespace: req.NamespacedName.Namespace}, existingK8sSecret); err != nil && k8serrors.IsNotFound(err) {
+		lastSync = metav1.Time{}
+	}
+
 	nextSync := lastSync.Time.Add(time.Duration(r.RefreshIntervalSeconds) * time.Second)
 
 	if !lastSync.IsZero() && time.Now().UTC().Before(nextSync) {
@@ -108,13 +116,6 @@ func (r *BitwardenSecretReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		return ctrl.Result{
 			RequeueAfter: remaining,
 		}, nil
-	}
-
-	// If the K8s Secret doesn't exist, force a full sync so it gets recreated
-	// regardless of whether Bitwarden reports changes since the last sync.
-	existingK8sSecret := &corev1.Secret{}
-	if err := r.Get(ctx, types.NamespacedName{Name: bwSecret.Spec.SecretName, Namespace: req.NamespacedName.Namespace}, existingK8sSecret); err != nil && k8serrors.IsNotFound(err) {
-		lastSync = metav1.Time{}
 	}
 
 	message := fmt.Sprintf("Syncing  %s/%s", req.NamespacedName.Namespace, req.Name)
