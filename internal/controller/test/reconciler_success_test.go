@@ -9,6 +9,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"k8s.io/apimachinery/pkg/types"
@@ -78,43 +79,73 @@ var _ = Describe("BitwardenSecret Reconciler - Success Tests", Ordered, func() {
 		}).Should(Succeed())
 	})
 
-	// //This test misbehaves with the following error.  There's no rational reason for this to happen, so we'll leave it to the
-	// //end user to figure out if this test is relevant to their needs.
-	// //Message: "Operation cannot be fulfilled on bitwardensecrets.k8s.bitwarden.com \"bw-secret\": the object has been modified; please apply your changes to the latest version and try again",
-	// It("should skip reconciliation when last sync is within refresh interval", func() {
-	// 	fixture.SetupDefaultCtrlMocks(false, nil)
+	It("should skip reconciliation when last sync is within refresh interval", func() {
+		fixture.SetupDefaultCtrlMocks(false, nil)
 
-	// 	_, err := fixture.CreateDefaultAuthSecret(namespace)
-	// 	Expect(err).NotTo(HaveOccurred())
+		_, err := fixture.CreateDefaultAuthSecret(namespace)
+		Expect(err).NotTo(HaveOccurred())
 
-	// 	bwSecret, err := fixture.CreateDefaultBitwardenSecret(namespace, fixture.SecretMap)
-	// 	Expect(err).NotTo(HaveOccurred())
-	// 	Expect(bwSecret).NotTo(BeNil())
+		_, err = fixture.CreateDefaultBitwardenSecret(namespace, fixture.SecretMap)
+		Expect(err).NotTo(HaveOccurred())
 
-	// 	// Update status with LastSuccessfulSyncTime, retrying on conflicts
-	// 	syncTime := time.Now().UTC()
-	// 	Eventually(func(g Gomega) {
-	// 		// Fetch the latest version of bwSecret (use cached client for Get)
-	// 		latestBwSecret := &operatorsv1.BitwardenSecret{}
-	// 		err := fixture.K8sClient.Get(fixture.Ctx, types.NamespacedName{Name: testutils.BitwardenSecretName, Namespace: namespace}, latestBwSecret)
-	// 		GinkgoWriter.Printf("Fetched BitwardenSecret %s/%s, ResourceVersion: %s, err: %v\n", namespace, testutils.BitwardenSecretName, latestBwSecret.ResourceVersion, err)
-	// 		g.Expect(err).Should(Succeed())
+		req := reconcile.Request{NamespacedName: types.NamespacedName{Name: testutils.BitwardenSecretName, Namespace: namespace}}
 
-	// 		// Update status
-	// 		latestBwSecret.Status = operatorsv1.BitwardenSecretStatus{
-	// 			LastSuccessfulSyncTime: metav1.Time{Time: syncTime},
-	// 		}
-	// 		err = fixture.K8sClient.Status().Update(fixture.Ctx, latestBwSecret)
-	// 		GinkgoWriter.Printf("Status update for %s/%s, ResourceVersion: %s, err: %v\n", namespace, testutils.BitwardenSecretName, latestBwSecret.ResourceVersion, err)
-	// 		g.Expect(err).Should(Succeed())
-	// 	}).WithTimeout(10 * time.Second).WithPolling(100 * time.Millisecond).Should(Succeed())
+		// First reconcile: performs the actual sync and sets LastSuccessfulSyncTime
+		result, err := fixture.Reconciler.Reconcile(fixture.Ctx, req)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result.RequeueAfter).To(Equal(time.Duration(fixture.Reconciler.RefreshIntervalSeconds) * time.Second))
 
-	// 	req := reconcile.Request{NamespacedName: types.NamespacedName{Name: testutils.BitwardenSecretName, Namespace: namespace}}
+		// Second reconcile: should skip because last sync is within refresh interval
+		result, err = fixture.Reconciler.Reconcile(fixture.Ctx, req)
+		Expect(err).NotTo(HaveOccurred())
+		fullInterval := time.Duration(fixture.Reconciler.RefreshIntervalSeconds) * time.Second
+		Expect(result.RequeueAfter).To(BeNumerically(">", 0))
+		Expect(result.RequeueAfter).To(BeNumerically("<=", fullInterval))
+	})
 
-	// 	result, err := fixture.Reconciler.Reconcile(fixture.Ctx, req)
-	// 	Expect(err).NotTo(HaveOccurred())
-	// 	Expect(result).To(Equal(reconcile.Result{}))
-	// })
+	It("should recreate the K8s Secret when it is deleted out-of-band", func() {
+		fixture.SetupDefaultCtrlMocks(false, nil)
+
+		_, err := fixture.CreateDefaultAuthSecret(namespace)
+		Expect(err).NotTo(HaveOccurred())
+
+		_, err = fixture.CreateDefaultBitwardenSecret(namespace, fixture.SecretMap)
+		Expect(err).NotTo(HaveOccurred())
+
+		req := reconcile.Request{NamespacedName: types.NamespacedName{Name: testutils.BitwardenSecretName, Namespace: namespace}}
+
+		// First reconcile: performs the sync and creates the K8s Secret
+		result, err := fixture.Reconciler.Reconcile(fixture.Ctx, req)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result.RequeueAfter).To(Equal(time.Duration(fixture.Reconciler.RefreshIntervalSeconds) * time.Second))
+
+		// Verify the K8s Secret was created
+		createdSecret := &corev1.Secret{}
+		Eventually(func(g Gomega) {
+			g.Expect(fixture.K8sClient.Get(fixture.Ctx, types.NamespacedName{Name: testutils.SynchronizedSecretName, Namespace: namespace}, createdSecret)).Should(Succeed())
+		}).Should(Succeed())
+
+		// Delete the K8s Secret out-of-band (simulating manual deletion)
+		Expect(fixture.K8sClient.Delete(fixture.Ctx, createdSecret)).To(Succeed())
+
+		// Wait for deletion to propagate
+		Eventually(func(g Gomega) {
+			err := fixture.K8sClient.Get(fixture.Ctx, types.NamespacedName{Name: testutils.SynchronizedSecretName, Namespace: namespace}, &corev1.Secret{})
+			g.Expect(k8serrors.IsNotFound(err)).To(BeTrue())
+		}).Should(Succeed())
+
+		// Second reconcile: should force a full sync and recreate the K8s Secret
+		result, err = fixture.Reconciler.Reconcile(fixture.Ctx, req)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result.RequeueAfter).To(Equal(time.Duration(fixture.Reconciler.RefreshIntervalSeconds) * time.Second))
+
+		// Verify the K8s Secret was recreated
+		recreatedSecret := &corev1.Secret{}
+		Eventually(func(g Gomega) {
+			g.Expect(fixture.K8sClient.Get(fixture.Ctx, types.NamespacedName{Name: testutils.SynchronizedSecretName, Namespace: namespace}, recreatedSecret)).Should(Succeed())
+			g.Expect(recreatedSecret.Data).NotTo(BeEmpty())
+		}).Should(Succeed())
+	})
 
 	It("should skip sync when no changes from Bitwarden API", func() {
 		// Override mocks to return no changes

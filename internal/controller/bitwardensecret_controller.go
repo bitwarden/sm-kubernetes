@@ -82,13 +82,13 @@ func (r *BitwardenSecretReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		//Error was due to missing item
 		if k8serrors.IsNotFound(err) {
 			logger.Info(fmt.Sprintf("%s/%s was deleted.", req.NamespacedName.Namespace, req.Name))
-			return ctrl.Result{}, err
+			return ctrl.Result{}, nil
 		}
 
-		logErr := r.LogError(logger, ctx, bwSecret, err, "Error looking up BitwardenSecret")
+		logger.Error(err, "Error looking up BitwardenSecret", "namespace", req.NamespacedName.Namespace, "name", req.Name)
 
 		//Other lookup error
-		return ctrl.Result{RequeueAfter: time.Duration(r.RefreshIntervalSeconds) * time.Second}, logErr
+		return ctrl.Result{RequeueAfter: time.Duration(r.RefreshIntervalSeconds) * time.Second}, err
 	}
 
 	// Validate that useSecretNames and onlyMappedSecrets are not both enabled
@@ -100,8 +100,22 @@ func (r *BitwardenSecretReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 
 	lastSync := bwSecret.Status.LastSuccessfulSyncTime
 
-	if !lastSync.IsZero() && time.Now().UTC().Before(lastSync.Time.Add(time.Duration(r.RefreshIntervalSeconds)*time.Second)) {
-		return ctrl.Result{}, nil
+	// If the K8s Secret doesn't exist, force a full sync so it gets recreated
+	// regardless of whether Bitwarden reports changes since the last sync.
+	existingK8sSecret := &corev1.Secret{}
+	if err := r.Get(ctx, types.NamespacedName{Name: bwSecret.Spec.SecretName, Namespace: req.NamespacedName.Namespace}, existingK8sSecret); err != nil && k8serrors.IsNotFound(err) {
+		lastSync = metav1.Time{}
+	}
+
+	nextSync := lastSync.Time.Add(time.Duration(r.RefreshIntervalSeconds) * time.Second)
+
+	if !lastSync.IsZero() && time.Now().UTC().Before(nextSync) {
+		remaining := time.Until(nextSync)
+		logger.Info(fmt.Sprintf("Skipping sync for %s/%s — last sync was %s, next sync in %s",
+			req.NamespacedName.Namespace, req.Name, lastSync.Time.Format("15:04:05"), remaining.Round(time.Second)))
+		return ctrl.Result{
+			RequeueAfter: remaining,
+		}, nil
 	}
 
 	message := fmt.Sprintf("Syncing  %s/%s", req.NamespacedName.Namespace, req.Name)
