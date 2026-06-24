@@ -59,6 +59,10 @@ type BitwardenSecretSpec struct {
 	// +kubebuilder:validation:Optional
 	// +kubebuilder:default=false
 	UseSecretNames bool `json:"useSecretNames,omitempty"`
+	// ProjectId, when set, filters the secrets synced from Bitwarden Secrets Manager to only those belonging
+	// to the specified project UUID. When unset, all secrets accessible by the machine account are synced.
+	// +kubebuilder:validation:Optional
+	ProjectId string `json:"projectId,omitempty"`
 }
 
 type AuthToken struct {
