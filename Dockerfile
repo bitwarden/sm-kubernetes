@@ -34,6 +34,7 @@ FROM base-builder AS csi-provider-builder
 ARG VERSION=dev
 
 COPY cmd/csi-provider/ cmd/csi-provider/
+COPY api/ api/
 COPY internal/csi/ internal/csi/
 COPY internal/sm/ internal/sm/
 
