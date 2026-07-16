@@ -76,18 +76,20 @@ const maxFilePermission = 0o600
 // Unlike api/v1.SecretMap (which only supports identifying a secret by
 // BwSecretId), SecretName is a by-name lookup with no existing counterpart
 // elsewhere in this codebase. Secrets Manager secret names are not
-// guaranteed unique, so the (not yet implemented) mount logic that resolves
-// SecretName to a secret must define and enforce its own uniqueness/
-// ambiguity handling; it must not assume name resolution is already solved
-// or that names are unique the way BwSecretID is.
+// guaranteed unique, so the mount logic that resolves SecretName to a
+// secret (resolveSecret in mount.go) defines and enforces its own
+// uniqueness/ambiguity handling via its byName map; it does not assume name
+// resolution is already solved or that names are unique the way BwSecretID
+// is.
 type ObjectEntry struct {
 	// BwSecretID is the Secrets Manager secret ID (UUID) to mount. Exactly
 	// one of BwSecretID or SecretName must be set.
 	BwSecretID string `json:"bwSecretId,omitempty"`
 	// SecretName is the Secrets Manager secret name to mount. Exactly one of
 	// BwSecretID or SecretName must be set. See the ObjectEntry doc comment:
-	// this is a new by-name identifier with no existing resolution logic or
-	// uniqueness guarantee elsewhere in the codebase.
+	// this is a by-name identifier resolved and disambiguated by
+	// resolveSecret in mount.go, which has no existing counterpart
+	// elsewhere in the codebase.
 	SecretName string `json:"secretName,omitempty"`
 	// FileName is the name of the file written into the CSI volume for this
 	// secret. Required.
@@ -183,14 +185,14 @@ func parseObjects(raw string) ([]ObjectEntry, error) {
 
 	seenFileNames := make(map[string]int, len(entries))
 
-	for i, entry := range entries {
-		if err := validateObjectEntry(entry); err != nil {
+	for i := range entries {
+		if err := validateObjectEntry(&entries[i]); err != nil {
 			return nil, fmt.Errorf("parameters: objects[%d]: %w", i, err)
 		}
 
-		fileName := strings.TrimSpace(entry.FileName)
+		fileName := entries[i].FileName
 		if j, ok := seenFileNames[fileName]; ok {
-			return nil, fmt.Errorf("parameters: objects[%d]: fileName %q duplicates objects[%d]; fileName must be unique across all entries", i, entry.FileName, j)
+			return nil, fmt.Errorf("parameters: objects[%d]: fileName %q duplicates objects[%d]; fileName must be unique across all entries", i, fileName, j)
 		}
 
 		seenFileNames[fileName] = i
@@ -202,7 +204,13 @@ func parseObjects(raw string) ([]ObjectEntry, error) {
 // validateObjectEntry validates a single ObjectEntry: exactly one of
 // bwSecretId or secretName must identify the secret to mount (see the
 // ObjectEntry doc comment for how secretName differs from api/v1.SecretMap).
-func validateObjectEntry(entry ObjectEntry) error {
+//
+// entry is normalized in place: BwSecretID, SecretName, and FileName are
+// trimmed and written back so that every downstream consumer (including
+// resolveSecret in mount.go, which uses plain != "" checks) observes the
+// same trimmed value this function judged as "set", rather than the
+// original, possibly whitespace-padded, value.
+func validateObjectEntry(entry *ObjectEntry) error {
 	bwSecretID := strings.TrimSpace(entry.BwSecretID)
 	secretName := strings.TrimSpace(entry.SecretName)
 
@@ -213,9 +221,19 @@ func validateObjectEntry(entry ObjectEntry) error {
 		return fmt.Errorf("only one of bwSecretId or secretName may be set, got both")
 	}
 
-	if strings.TrimSpace(entry.FileName) == "" {
+	entry.BwSecretID = bwSecretID
+	entry.SecretName = secretName
+
+	fileName := strings.TrimSpace(entry.FileName)
+	if fileName == "" {
 		return fmt.Errorf("fileName is required")
 	}
+
+	if strings.ContainsAny(fileName, `/\`) || fileName == ".." {
+		return fmt.Errorf("fileName must not contain path separators or '..'")
+	}
+
+	entry.FileName = fileName
 
 	if entry.FilePermission != "" {
 		if _, err := parseFilePermission(entry.FilePermission); err != nil {

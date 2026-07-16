@@ -197,6 +197,45 @@ func TestParseParametersMissingOrganizationID(t *testing.T) {
 	}
 }
 
+// TestParseParametersNormalizesObjectEntryFields verifies that whitespace
+// surrounding BwSecretID/SecretName/FileName is trimmed once during
+// validation and that the trimmed values (not the original, padded ones)
+// are what ParseParameters returns. This matters because mount.go's
+// resolveSecret later branches on a plain `!= ""` check of the returned
+// ObjectEntry: if BwSecretID were left as whitespace-only, that check would
+// incorrectly take the ID-lookup branch even though the entry should be
+// resolved by its (valid) SecretName.
+func TestParseParametersNormalizesObjectEntryFields(t *testing.T) {
+	validOrgID := "22222222-2222-2222-2222-222222222222"
+
+	attrs := buildAttributes(t, map[string]string{
+		"organizationId": validOrgID,
+		"objects":        `[{"bwSecretId": "   ", "secretName": "  api-key  ", "fileName": "  api-key  "}]`,
+	})
+
+	params, err := ParseParameters(attrs)
+	if err != nil {
+		t.Fatalf("ParseParameters returned unexpected error: %v", err)
+	}
+
+	if len(params.Objects) != 1 {
+		t.Fatalf("len(Objects) = %d, want 1", len(params.Objects))
+	}
+
+	got := params.Objects[0]
+	if got.BwSecretID != "" {
+		t.Errorf("BwSecretID = %q, want empty (trimmed)", got.BwSecretID)
+	}
+
+	if got.SecretName != "api-key" {
+		t.Errorf("SecretName = %q, want %q", got.SecretName, "api-key")
+	}
+
+	if got.FileName != "api-key" {
+		t.Errorf("FileName = %q, want %q", got.FileName, "api-key")
+	}
+}
+
 func TestParseParametersMalformedObjects(t *testing.T) {
 	validOrgID := "22222222-2222-2222-2222-222222222222"
 
@@ -267,6 +306,31 @@ func TestParseParametersMalformedObjects(t *testing.T) {
 				{"bwSecretId": "33333333-3333-3333-3333-333333333333", "fileName": "creds"}
 			]`,
 			wantErrSub: "duplicates",
+		},
+		{
+			name:       "entry with fileName path traversal",
+			objects:    `[{"bwSecretId": "11111111-1111-1111-1111-111111111111", "fileName": "../evilfile"}]`,
+			wantErrSub: "fileName must not contain path separators or '..'",
+		},
+		{
+			name:       "entry with fileName exactly '..'",
+			objects:    `[{"bwSecretId": "11111111-1111-1111-1111-111111111111", "fileName": ".."}]`,
+			wantErrSub: "fileName must not contain path separators or '..'",
+		},
+		{
+			name:       "entry with fileName containing a slash",
+			objects:    `[{"bwSecretId": "11111111-1111-1111-1111-111111111111", "fileName": "sub/dir"}]`,
+			wantErrSub: "fileName must not contain path separators or '..'",
+		},
+		{
+			name:       "entry with fileName containing a backslash",
+			objects:    `[{"bwSecretId": "11111111-1111-1111-1111-111111111111", "fileName": "sub\\dir"}]`,
+			wantErrSub: "fileName must not contain path separators or '..'",
+		},
+		{
+			name:       "entry with whitespace-only bwSecretId and no secretName",
+			objects:    `[{"bwSecretId": "   ", "fileName": "foo"}]`,
+			wantErrSub: "exactly one of bwSecretId or secretName is required",
 		},
 	}
 
