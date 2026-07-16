@@ -140,6 +140,17 @@ func resolveSecret(obj ObjectEntry, byID map[string]sdk.SecretResponse, byName m
 
 // secretVersion derives a stable version string from a secret's content, so
 // unchanged secrets always produce the same ObjectVersion.
+//
+// Deliberately, only secret.Value (the bytes actually written to the
+// mounted file) feeds the hash. Every other SecretResponse field -
+// RevisionDate and CreationDate in particular - is metadata that Secrets
+// Manager may legitimately change independently of Value (e.g. touched by
+// an unrelated update, or simply re-echoed on every Sync response), and is
+// never written to the mounted file. Hashing any of those in would make
+// object_versions churn on every driver rotation poll even though the
+// mounted file contents never changed, defeating the whole point of
+// RequiresRepublish-based rotation (see docs/rotation.md and
+// TestBuildMountFilesVersionIgnoresVolatileMetadata).
 func secretVersion(secret sdk.SecretResponse) string {
 	sum := sha256.Sum256([]byte(secret.Value))
 	return hex.EncodeToString(sum[:])

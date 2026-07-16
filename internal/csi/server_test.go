@@ -206,6 +206,71 @@ func TestServerMountEndToEnd(t *testing.T) {
 	}
 }
 
+// TestServerMountNoSyncChangesKeepsStableObjectVersion mirrors the realistic
+// rotation-poll pattern: the upstream driver re-invokes Mount roughly every
+// --rotation-poll-interval tick, and on most of those ticks Secrets Manager
+// reports no changes (HasChanges: false) since the last sync. This verifies
+// object_versions still comes back identical in that case (not just when the
+// fake always echoes back an unchanged full secret list, as in
+// TestServerMountEndToEnd above), so the driver's rotation reconcile treats
+// it as a no-op republish rather than churning on every poll.
+func TestServerMountNoSyncChangesKeepsStableObjectVersion(t *testing.T) {
+	secretID := "11111111-1111-1111-1111-111111111111"
+
+	calls := 0
+
+	factory := newFakeClientFactory(func(orgID string, lastSync *time.Time) (*sdk.SecretsSyncResponse, error) {
+		calls++
+		if calls == 1 {
+			return &sdk.SecretsSyncResponse{
+				HasChanges: true,
+				Secrets:    []sdk.SecretResponse{{ID: secretID, Key: "db-password", Value: "s3cr3t"}},
+			}, nil
+		}
+
+		// Subsequent polls report no changes since lastSync, as Secrets
+		// Manager does when nothing changed; Secrets is omitted entirely.
+		return &sdk.SecretsSyncResponse{HasChanges: false, Secrets: nil}, nil
+	})
+
+	srv := newServerWithFactory(testLogger(), factory.newFactory)
+
+	mountReq := &pb.MountRequest{
+		Attributes: buildAttributes(t, map[string]string{
+			"organizationId": "22222222-2222-2222-2222-222222222222",
+			"objects": objectsJSON(t, []ObjectEntry{
+				{BwSecretID: secretID, FileName: "db-password"},
+			}),
+		}),
+		Secrets:    buildAttributes(t, map[string]string{secretRefTokenKey: "test-access-token"}),
+		TargetPath: "/mnt/secrets",
+	}
+
+	var firstVersion string
+
+	for i := 0; i < 3; i++ {
+		resp, err := srv.Mount(context.Background(), mountReq)
+		if err != nil {
+			t.Fatalf("Mount call %d returned error: %v", i, err)
+		}
+
+		if len(resp.GetObjectVersion()) != 1 {
+			t.Fatalf("Mount call %d: len(ObjectVersion) = %d, want 1", i, len(resp.GetObjectVersion()))
+		}
+
+		version := resp.GetObjectVersion()[0].GetVersion()
+
+		if i == 0 {
+			firstVersion = version
+			continue
+		}
+
+		if version != firstVersion {
+			t.Errorf("Mount call %d: object version = %q, want stable %q (poll reported no changes)", i, version, firstVersion)
+		}
+	}
+}
+
 // TestRecoveryUnaryInterceptorRecoversPanic verifies that a panic raised by
 // an RPC handler is recovered into a codes.Internal error rather than
 // propagating and crashing the process, since this provider runs as a

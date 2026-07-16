@@ -23,6 +23,7 @@ package csi
 import (
 	"strings"
 	"testing"
+	"time"
 
 	sdk "github.com/bitwarden/sdk-go/v2"
 )
@@ -233,6 +234,102 @@ func TestBuildMountFilesStableVersion(t *testing.T) {
 
 	if v1[0].GetVersion() == v3[0].GetVersion() {
 		t.Errorf("version unchanged for different content: %q == %q", v1[0].GetVersion(), v3[0].GetVersion())
+	}
+}
+
+// TestBuildMountFilesVersionIgnoresVolatileMetadata guards the invariant
+// secretVersion relies on: the ObjectVersion is derived solely from the
+// secret's Value (the bytes actually written to the mounted file), never
+// from metadata such as RevisionDate/CreationDate that Secrets Manager can
+// legitimately change (e.g. on every Sync response) without the secret's
+// Value itself changing. Regressing this - for example, folding
+// RevisionDate into the hash - would make object_versions churn on every
+// driver rotation poll even though the mounted file contents never change,
+// causing needless republishes.
+func TestBuildMountFilesVersionIgnoresVolatileMetadata(t *testing.T) {
+	objects := []ObjectEntry{
+		{BwSecretID: "id-1", FileName: "db-password"},
+	}
+
+	base := sdk.SecretResponse{
+		ID:             "id-1",
+		Key:            "db-password",
+		Note:           "original note",
+		OrganizationID: "org-1",
+		Value:          "s3cr3t",
+		CreationDate:   time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC),
+		RevisionDate:   time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC),
+	}
+
+	touched := base
+	touched.Key = "renamed"
+	touched.Note = "a different note"
+	touched.OrganizationID = "org-2"
+	touched.CreationDate = time.Now()
+	touched.RevisionDate = time.Now()
+
+	_, vBase, err := buildMountFiles(objects, map[string]sdk.SecretResponse{"id-1": base}, nil)
+	if err != nil {
+		t.Fatalf("buildMountFiles returned unexpected error: %v", err)
+	}
+
+	_, vTouched, err := buildMountFiles(objects, map[string]sdk.SecretResponse{"id-1": touched}, nil)
+	if err != nil {
+		t.Fatalf("buildMountFiles returned unexpected error: %v", err)
+	}
+
+	if vBase[0].GetVersion() != vTouched[0].GetVersion() {
+		t.Errorf("version changed when only volatile metadata (not Value) changed: %q != %q", vBase[0].GetVersion(), vTouched[0].GetVersion())
+	}
+
+	changedValue := base
+	changedValue.Value = "different"
+
+	_, vChanged, err := buildMountFiles(objects, map[string]sdk.SecretResponse{"id-1": changedValue}, nil)
+	if err != nil {
+		t.Fatalf("buildMountFiles returned unexpected error: %v", err)
+	}
+
+	if vBase[0].GetVersion() == vChanged[0].GetVersion() {
+		t.Errorf("version unchanged when Value changed: %q == %q", vBase[0].GetVersion(), vChanged[0].GetVersion())
+	}
+}
+
+// TestBuildMountFilesStableVersionRepeatedCalls proves object_versions
+// stability holds across many repeated calls (not just two), and across
+// multiple objects at once, since that is exactly the pattern the driver's
+// rotation reconcile relies on: it re-invokes Mount on every
+// --rotation-poll-interval tick and compares the returned object_versions to
+// the previous ones to decide whether to republish.
+func TestBuildMountFilesStableVersionRepeatedCalls(t *testing.T) {
+	byID := map[string]sdk.SecretResponse{
+		"id-1": {ID: "id-1", Value: "v1"},
+		"id-2": {ID: "id-2", Value: "v2"},
+	}
+
+	objects := []ObjectEntry{
+		{BwSecretID: "id-1", FileName: "file-1"},
+		{BwSecretID: "id-2", FileName: "file-2"},
+	}
+
+	var firstVersions []string
+
+	for i := 0; i < 5; i++ {
+		_, versions, err := buildMountFiles(objects, byID, nil)
+		if err != nil {
+			t.Fatalf("buildMountFiles call %d returned unexpected error: %v", i, err)
+		}
+
+		got := []string{versions[0].GetVersion(), versions[1].GetVersion()}
+
+		if i == 0 {
+			firstVersions = got
+			continue
+		}
+
+		if got[0] != firstVersions[0] || got[1] != firstVersions[1] {
+			t.Errorf("call %d: object_versions = %v, want stable %v", i, got, firstVersions)
+		}
 	}
 }
 
