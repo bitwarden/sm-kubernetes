@@ -123,6 +123,7 @@ func findDoc(t *testing.T, docs []string, kind string) string {
 // spec that must match between the two render paths.
 type containerSnapshot struct {
 	Name            string
+	Command         []string
 	Args            []string
 	SecurityContext *corev1.SecurityContext
 	Resources       corev1.ResourceRequirements
@@ -141,7 +142,28 @@ type daemonSetSnapshot struct {
 	Tolerations                  []corev1.Toleration
 	SecurityContext              *corev1.PodSecurityContext
 	Volumes                      []corev1.Volume
+	InitContainers               []containerSnapshot
 	Containers                   []containerSnapshot
+}
+
+// containerSnapshots converts and sorts a list of containers (regular or
+// init) into comparable snapshots.
+func containerSnapshots(cs []corev1.Container) []containerSnapshot {
+	out := make([]containerSnapshot, 0, len(cs))
+	for _, c := range cs {
+		mounts := append([]corev1.VolumeMount{}, c.VolumeMounts...)
+		sort.Slice(mounts, func(i, j int) bool { return mounts[i].Name < mounts[j].Name })
+		out = append(out, containerSnapshot{
+			Name:            c.Name,
+			Command:         c.Command,
+			Args:            c.Args,
+			SecurityContext: c.SecurityContext,
+			Resources:       c.Resources,
+			VolumeMounts:    mounts,
+		})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	return out
 }
 
 func snapshotDaemonSet(t *testing.T, doc string) daemonSetSnapshot {
@@ -156,20 +178,6 @@ func snapshotDaemonSet(t *testing.T, doc string) daemonSetSnapshot {
 	volumes := append([]corev1.Volume{}, podSpec.Volumes...)
 	sort.Slice(volumes, func(i, j int) bool { return volumes[i].Name < volumes[j].Name })
 
-	containers := make([]containerSnapshot, 0, len(podSpec.Containers))
-	for _, c := range podSpec.Containers {
-		mounts := append([]corev1.VolumeMount{}, c.VolumeMounts...)
-		sort.Slice(mounts, func(i, j int) bool { return mounts[i].Name < mounts[j].Name })
-		containers = append(containers, containerSnapshot{
-			Name:            c.Name,
-			Args:            c.Args,
-			SecurityContext: c.SecurityContext,
-			Resources:       c.Resources,
-			VolumeMounts:    mounts,
-		})
-	}
-	sort.Slice(containers, func(i, j int) bool { return containers[i].Name < containers[j].Name })
-
 	tolerations := append([]corev1.Toleration{}, podSpec.Tolerations...)
 	sort.Slice(tolerations, func(i, j int) bool { return tolerations[i].Key < tolerations[j].Key })
 
@@ -180,7 +188,8 @@ func snapshotDaemonSet(t *testing.T, doc string) daemonSetSnapshot {
 		Tolerations:                  tolerations,
 		SecurityContext:              podSpec.SecurityContext,
 		Volumes:                      volumes,
-		Containers:                   containers,
+		InitContainers:               containerSnapshots(podSpec.InitContainers),
+		Containers:                   containerSnapshots(podSpec.Containers),
 	}
 }
 

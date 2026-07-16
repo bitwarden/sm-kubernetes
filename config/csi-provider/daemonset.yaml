@@ -56,6 +56,28 @@ spec:
         runAsNonRoot: true
         seccompProfile:
           type: RuntimeDefault
+      # kubelet creates the provider-socket hostPath below as root:root 0755
+      # the first time it's needed (DirectoryOrCreate) and never chowns it
+      # for fsGroup, since fsGroup does not apply to hostPath volumes. The
+      # non-root provider container cannot create its Unix socket inside a
+      # directory it can't write to, so this init container -- and only this
+      # init container -- runs as root, purely to chmod that one shared
+      # directory before the long-running provider process starts.
+      initContainers:
+        - name: init-provider-socket-dir
+          image: busybox:1.36
+          command: ["sh", "-c", "chmod 0777 /etc/kubernetes/secrets-store-csi-providers"]
+          securityContext:
+            runAsNonRoot: false
+            runAsUser: 0
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - "ALL"
+          volumeMounts:
+            - name: provider-socket
+              mountPath: /etc/kubernetes/secrets-store-csi-providers
       containers:
         - name: bitwarden-csi-provider
           image: csi-provider:latest
