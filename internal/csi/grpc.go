@@ -98,7 +98,10 @@ func Run(ctx context.Context, socketPath string, log logr.Logger) error {
 		return err
 	}
 
-	grpcServer := NewGRPCServer(NewServer(log))
+	srv := NewServer(log)
+	defer srv.Close()
+
+	grpcServer := NewGRPCServer(srv)
 
 	errCh := make(chan error, 1)
 	go func() {

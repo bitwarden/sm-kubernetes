@@ -25,6 +25,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -32,6 +33,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
+	sdk "github.com/bitwarden/sdk-go/v2"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	pb "sigs.k8s.io/secrets-store-csi-driver/provider/v1alpha1"
 )
@@ -81,25 +83,124 @@ func TestServerVersion(t *testing.T) {
 	}
 }
 
-func TestServerMountStub(t *testing.T) {
+// TestServerMountInvalidAttributes verifies that Mount rejects a request
+// whose SecretProviderClass parameters don't parse, without ever attempting
+// to contact Bitwarden Secrets Manager.
+func TestServerMountInvalidAttributes(t *testing.T) {
 	srv := NewServer(testLogger())
 
-	resp, err := srv.Mount(context.Background(), &pb.MountRequest{
+	_, err := srv.Mount(context.Background(), &pb.MountRequest{
 		Attributes: "{}",
 		Secrets:    "{}",
 		TargetPath: "/mnt/secrets",
 		Permission: "420",
 	})
+	if err == nil {
+		t.Fatal("Mount unexpectedly succeeded on empty attributes")
+	}
+
+	if !strings.Contains(err.Error(), "organizationId") {
+		t.Errorf("error = %q, want mention of organizationId", err.Error())
+	}
+}
+
+// TestServerMountMissingToken verifies that Mount rejects a request whose
+// nodePublishSecretRef secret doesn't carry an access token, without ever
+// attempting to contact Bitwarden Secrets Manager.
+func TestServerMountMissingToken(t *testing.T) {
+	srv := NewServer(testLogger())
+
+	objects := objectsJSON(t, []ObjectEntry{
+		{BwSecretID: "11111111-1111-1111-1111-111111111111", FileName: "db-password"},
+	})
+
+	_, err := srv.Mount(context.Background(), &pb.MountRequest{
+		Attributes: buildAttributes(t, map[string]string{
+			"organizationId": "22222222-2222-2222-2222-222222222222",
+			"objects":        objects,
+		}),
+		Secrets:    "{}",
+		TargetPath: "/mnt/secrets",
+		Permission: "420",
+	})
+	if err == nil {
+		t.Fatal("Mount unexpectedly succeeded with no access token in nodePublishSecretRef secret")
+	}
+
+	if !strings.Contains(err.Error(), secretRefTokenKey) {
+		t.Errorf("error = %q, want mention of %q", err.Error(), secretRefTokenKey)
+	}
+}
+
+// TestServerMountEndToEnd exercises the full Mount flow (parameter parsing,
+// token extraction, cache/session lookup, Secrets Manager sync, and
+// mapping/aliasing) against a fake Secrets Manager client, verifying the
+// returned files and that repeated Mounts of unchanged secrets produce
+// stable object versions.
+func TestServerMountEndToEnd(t *testing.T) {
+	secretID := "11111111-1111-1111-1111-111111111111"
+
+	sdkSecrets := []sdk.SecretResponse{
+		{ID: secretID, Key: "db-password", Value: "s3cr3t"},
+	}
+
+	factory := newFakeClientFactory(func(orgID string, lastSync *time.Time) (*sdk.SecretsSyncResponse, error) {
+		return &sdk.SecretsSyncResponse{HasChanges: true, Secrets: sdkSecrets}, nil
+	})
+
+	srv := newServerWithFactory(testLogger(), factory.newFactory)
+
+	mountReq := &pb.MountRequest{
+		Attributes: buildAttributes(t, map[string]string{
+			"organizationId": "22222222-2222-2222-2222-222222222222",
+			"objects": objectsJSON(t, []ObjectEntry{
+				{BwSecretID: secretID, FileName: "db-password"},
+			}),
+		}),
+		Secrets:    buildAttributes(t, map[string]string{secretRefTokenKey: "test-access-token"}),
+		TargetPath: "/mnt/secrets",
+	}
+
+	resp, err := srv.Mount(context.Background(), mountReq)
 	if err != nil {
 		t.Fatalf("Mount returned error: %v", err)
 	}
 
-	if resp == nil {
-		t.Fatal("Mount returned nil response")
+	if len(resp.GetFiles()) != 1 {
+		t.Fatalf("len(Files) = %d, want 1", len(resp.GetFiles()))
 	}
 
-	if resp.GetError() != nil {
-		t.Errorf("Mount returned unexpected Error: %v", resp.GetError())
+	file := resp.GetFiles()[0]
+	if file.GetPath() != "db-password" || string(file.GetContents()) != "s3cr3t" {
+		t.Errorf("Files[0] = %+v, want path %q contents %q", file, "db-password", "s3cr3t")
+	}
+
+	if len(resp.GetObjectVersion()) != 1 {
+		t.Fatalf("len(ObjectVersion) = %d, want 1", len(resp.GetObjectVersion()))
+	}
+
+	firstVersion := resp.GetObjectVersion()[0].GetVersion()
+
+	// A second Mount of the same unchanged secret should produce the same
+	// object version, so the driver's rotation reconcile is a no-op.
+	resp2, err := srv.Mount(context.Background(), mountReq)
+	if err != nil {
+		t.Fatalf("second Mount returned error: %v", err)
+	}
+
+	if resp2.GetObjectVersion()[0].GetVersion() != firstVersion {
+		t.Errorf("object version changed across unchanged Mounts: %q != %q", resp2.GetObjectVersion()[0].GetVersion(), firstVersion)
+	}
+
+	// Each sequential Mount polls Secrets Manager for changes (that's how
+	// rotation detection works), but the underlying session/login is reused
+	// rather than recreated.
+	if factory.syncCalls() != 2 {
+		t.Errorf("Secrets().Sync called %d times, want 2", factory.syncCalls())
+	}
+
+	if factory.creationCalls() != 1 {
+		t.Errorf("client factory invoked %d times, want 1 (the logged-in session should be cached/reused)", factory.creationCalls())
 	}
 }
 
