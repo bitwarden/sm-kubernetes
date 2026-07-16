@@ -344,6 +344,87 @@ func TestEntrySyncSingleFlight(t *testing.T) {
 	}
 }
 
+// TestEntrySyncLeaderShortDeadlineDoesNotPoisonFollower verifies that a
+// single-flight sync leader whose own context expires early does not cause
+// a concurrent follower - whose own context still has plenty of time left -
+// to fail as well. The shared retry work must run independently of
+// whichever caller happens to start it.
+func TestEntrySyncLeaderShortDeadlineDoesNotPoisonFollower(t *testing.T) {
+	var mu sync.Mutex
+	calls := 0
+
+	firstAttemptStarted := make(chan struct{})
+
+	factory := newFakeClientFactory(func(string, *time.Time) (*sdk.SecretsSyncResponse, error) {
+		mu.Lock()
+		calls++
+		n := calls
+		mu.Unlock()
+
+		// The first attempt fails transiently, after signaling the test that
+		// it has started (so the test can join a follower into the same
+		// single-flight call before the leader's own context expires below).
+		// The retry, after syncBaseBackoff's delay, succeeds.
+		if n == 1 {
+			close(firstAttemptStarted)
+			return nil, errBoom
+		}
+
+		return &sdk.SecretsSyncResponse{HasChanges: true, Secrets: []sdk.SecretResponse{{ID: "id-1", Value: "v1"}}}, nil
+	})
+
+	cache := newTestCache(t, defaultCacheMaxEntries, defaultCacheIdleTimeout, factory)
+
+	entry, err := cache.getOrCreate("org-1", "token-a", "https://api", "https://identity")
+	if err != nil {
+		t.Fatalf("getOrCreate returned unexpected error: %v", err)
+	}
+
+	// The leader's own context expires well before syncBaseBackoff's
+	// inter-attempt delay elapses, simulating a caller with a much shorter
+	// deadline than a concurrent caller for the same (organizationId,
+	// token) that happens to race it into becoming the single-flight
+	// leader.
+	leaderCtx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+	defer cancel()
+
+	var wg sync.WaitGroup
+	var leaderErr error
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		_, _, leaderErr = entry.sync(leaderCtx)
+	}()
+
+	// Wait until the leader has created the single-flight call and made its
+	// first (failing) attempt, then immediately join a follower into that
+	// same call - well before the leader's 10ms deadline expires - so the
+	// follower observes whatever happens to the shared call as a result of
+	// the leader's context, not a fresh one of its own.
+	select {
+	case <-firstAttemptStarted:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for the first sync attempt to start")
+	}
+
+	followerByID, _, followerErr := entry.sync(context.Background())
+
+	wg.Wait()
+
+	if !errors.Is(leaderErr, context.DeadlineExceeded) {
+		t.Errorf("leader sync error = %v, want context.DeadlineExceeded", leaderErr)
+	}
+
+	if followerErr != nil {
+		t.Errorf("follower sync returned unexpected error: %v, want nil: a follower with plenty of time left on its own context must not be poisoned by the leader's context expiring", followerErr)
+	}
+
+	if followerByID["id-1"].Value != "v1" {
+		t.Errorf("follower sync result = %+v, want secret id-1 with value v1", followerByID)
+	}
+}
+
 // TestEntrySyncKeepsPreviousSnapshotWhenNoChanges verifies that when
 // Secrets Manager reports no changes on a subsequent sync, the entry keeps
 // serving its previous snapshot instead of clearing it.

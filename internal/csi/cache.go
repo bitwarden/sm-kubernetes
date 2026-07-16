@@ -398,46 +398,51 @@ func (e *smCacheEntry) closeAndCleanup() {
 //
 // Concurrent callers collapse into a single Secrets Manager Sync call: if a
 // sync is already in flight for this entry, callers wait for it and reuse
-// its result rather than starting a redundant one.
+// its result rather than starting a redundant one. The shared work runs
+// with a context detached from whichever caller happens to be the one that
+// starts it (see the goroutine below), so every caller's own context solely
+// governs how long that caller itself is willing to wait, not how long the
+// shared sync is allowed to keep retrying.
 func (e *smCacheEntry) sync(ctx context.Context) (map[string]sdk.SecretResponse, map[string][]sdk.SecretResponse, error) {
 	e.mu.Lock()
-	if call := e.inflight; call != nil {
-		e.mu.Unlock()
+	call := e.inflight
+	if call == nil {
+		call = &syncCall{done: make(chan struct{})}
+		e.inflight = call
 
-		select {
-		case <-call.done:
-		case <-ctx.Done():
-			return nil, nil, ctx.Err()
-		}
+		// doSync is started against a context detached from this caller's
+		// deadline/cancellation (context.WithoutCancel keeps values but
+		// drops both), because it is shared by every concurrent caller that
+		// collapses into this syncCall: a caller with a short deadline must
+		// not be able to abort work that other, longer-lived callers are
+		// still waiting on below. doSync's own retry budget
+		// (syncMaxAttempts/syncBaseBackoff) still bounds how long it runs.
+		go func() {
+			err := e.doSync(context.WithoutCancel(ctx))
 
-		if call.err != nil {
-			return nil, nil, call.err
-		}
+			e.mu.Lock()
+			e.inflight = nil
+			e.mu.Unlock()
 
-		e.mu.Lock()
-		byID, byName := e.byID, e.byName
-		e.mu.Unlock()
-
-		return byID, byName, nil
+			call.err = err
+			close(call.done)
+		}()
 	}
-
-	call := &syncCall{done: make(chan struct{})}
-	e.inflight = call
 	e.mu.Unlock()
 
-	err := e.doSync(ctx)
+	select {
+	case <-call.done:
+	case <-ctx.Done():
+		return nil, nil, ctx.Err()
+	}
+
+	if call.err != nil {
+		return nil, nil, call.err
+	}
 
 	e.mu.Lock()
-	e.inflight = nil
 	byID, byName := e.byID, e.byName
 	e.mu.Unlock()
-
-	call.err = err
-	close(call.done)
-
-	if err != nil {
-		return nil, nil, err
-	}
 
 	return byID, byName, nil
 }
