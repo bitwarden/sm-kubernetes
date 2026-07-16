@@ -10,6 +10,12 @@ non-chart raw manifests (`../*.yaml`), the sample `SecretProviderClass`
 (`../secretproviderclass-sample.yaml`), and why the driver must be
 **>= v1.6.0** for rotation to work.
 
+The DaemonSet/ServiceAccount templated here (`templates/daemonset.yaml`,
+`templates/serviceaccount.yaml`) duplicate the raw manifests in `../*.yaml`
+with no shared source of truth -- see
+[../README.md#keeping-the-raw-manifests-and-the-helm-chart-in-sync](../README.md#keeping-the-raw-manifests-and-the-helm-chart-in-sync)
+before changing any security-relevant field in either.
+
 ## Prerequisites
 
 - The upstream secrets-store-csi-driver, **>= v1.6.0**. This chart does

@@ -3,6 +3,16 @@
 # /etc/kubernetes/secrets-store-csi-providers, a hostPath shared with the
 # driver's own node pods so they can dial this provider's socket to service
 # Mount RPCs for pods scheduled on the same node.
+#
+# KEPT IN SYNC WITH: chart/templates/daemonset.yaml. There is no shared
+# source of truth between this plain manifest and the Helm chart template,
+# so any change to a security-relevant field below (securityContext,
+# capabilities, resources, tolerations, priorityClassName, volumes/
+# volumeMounts) must be mirrored by hand in the chart template (and its
+# chart/values.yaml defaults). Verify the two stay equivalent with:
+#   diff <(kubectl kustomize config/csi-provider) \
+#        <(helm template sync config/csi-provider/chart --namespace kube-system \
+#            --set fullnameOverride=bitwarden-csi-provider)
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:

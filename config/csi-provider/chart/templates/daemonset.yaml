@@ -1,3 +1,14 @@
+{{- /*
+KEPT IN SYNC WITH: ../../daemonset.yaml. There is no shared source of truth
+between this chart template and the plain kustomize manifest, so any change
+to a security-relevant field below (securityContext, capabilities,
+resources, tolerations, priorityClassName, volumes/volumeMounts) must be
+mirrored by hand in ../../daemonset.yaml. Verify the two stay equivalent
+with:
+  diff <(kubectl kustomize config/csi-provider) \
+       <(helm template sync config/csi-provider/chart --namespace kube-system \
+           --set fullnameOverride=bitwarden-csi-provider)
+*/ -}}
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:

@@ -17,6 +17,12 @@
 # If a future version of this provider needs to call the Kubernetes API,
 # grant it the minimum verbs required at that point rather than reusing a
 # broader existing identity.
+#
+# KEPT IN SYNC WITH: chart/templates/serviceaccount.yaml. There is no shared
+# source of truth between this plain manifest and the Helm chart template --
+# if RBAC scope changes here (e.g. a Role/RoleBinding becomes necessary),
+# mirror the same scope in the chart template. See daemonset.yaml for the
+# diff command used to check the two render equivalently.
 apiVersion: v1
 kind: ServiceAccount
 metadata:

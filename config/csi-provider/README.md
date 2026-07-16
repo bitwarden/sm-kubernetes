@@ -60,6 +60,28 @@ Role/ClusterRole/RoleBinding/ClusterRoleBinding at all. See the comments in
 that file if a future change to this provider needs to call the Kubernetes
 API -- grant the minimum verbs required at that point.
 
+## Keeping the raw manifests and the Helm chart in sync
+
+[`daemonset.yaml`](daemonset.yaml) / [`rbac.yaml`](rbac.yaml) and
+[`chart/templates/daemonset.yaml`](chart/templates/daemonset.yaml) /
+[`chart/templates/serviceaccount.yaml`](chart/templates/serviceaccount.yaml)
+describe the same DaemonSet/ServiceAccount/RBAC posture twice, with no shared
+source of truth between the two formats. Security-relevant fields
+(`securityContext`, `capabilities`, `resources`, `tolerations`,
+`priorityClassName`, RBAC scope, volumes/volumeMounts) are hand-duplicated
+across both, and each file carries a `KEPT IN SYNC WITH` comment pointing at
+its counterpart. When changing any of those fields in one, mirror the change
+in the other, and confirm the two still render equivalently with:
+
+```console
+diff <(kubectl kustomize config/csi-provider) \
+     <(helm template sync config/csi-provider/chart --namespace kube-system \
+         --set fullnameOverride=bitwarden-csi-provider)
+```
+
+(the `helm template` output additionally has Helm's own `app.kubernetes.io/*`
+release labels, which is expected -- the diff should otherwise be empty.)
+
 ## Deploying the raw manifests
 
 ```console
