@@ -1,0 +1,80 @@
+# Runs the Bitwarden provider for the upstream secrets-store-csi-driver on
+# every node. The provider listens on a Unix Domain Socket under
+# /etc/kubernetes/secrets-store-csi-providers, a hostPath shared with the
+# driver's own node pods so they can dial this provider's socket to service
+# Mount RPCs for pods scheduled on the same node.
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: bitwarden-csi-provider
+  namespace: kube-system
+  labels:
+    app.kubernetes.io/name: daemonset
+    app.kubernetes.io/instance: bitwarden-csi-provider
+    app.kubernetes.io/component: csi-provider
+    app.kubernetes.io/created-by: sm-operator
+    app.kubernetes.io/part-of: sm-operator
+    app.kubernetes.io/managed-by: kustomize
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: bitwarden-csi-provider
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: bitwarden-csi-provider
+    spec:
+      serviceAccountName: bitwarden-csi-provider
+      automountServiceAccountToken: false
+      # Runs on every node, including control-plane/tainted nodes, so pods
+      # scheduled anywhere in the cluster can reach a local provider socket.
+      tolerations:
+        - operator: Exists
+      # Matches the priority the upstream secrets-store-csi-driver itself
+      # runs at, since Mount RPCs to this provider are on the critical path
+      # for pod volume mounting on the node.
+      priorityClassName: system-node-critical
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: bitwarden-csi-provider
+          image: csi-provider:latest
+          imagePullPolicy: IfNotPresent
+          args:
+            - --endpoint=/etc/kubernetes/secrets-store-csi-providers/bitwarden.sock
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - "ALL"
+          resources:
+            limits:
+              cpu: 500m
+              memory: 128Mi
+            requests:
+              cpu: 10m
+              memory: 64Mi
+          volumeMounts:
+            - name: provider-socket
+              mountPath: /etc/kubernetes/secrets-store-csi-providers
+            # The provider keeps a bounded, idle-evicting cache of logged-in
+            # Secrets Manager SDK sessions under a per-session state
+            # directory created at runtime via os.MkdirTemp under the
+            # default temp directory. readOnlyRootFilesystem requires that
+            # temp directory to be a writable mount.
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: provider-socket
+          hostPath:
+            path: /etc/kubernetes/secrets-store-csi-providers
+            type: DirectoryOrCreate
+        - name: tmp
+          emptyDir: {}
