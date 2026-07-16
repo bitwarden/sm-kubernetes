@@ -210,6 +210,24 @@ func TestParseParametersMalformedObjects(t *testing.T) {
 			objects:    `[{"bwSecretId": "11111111-1111-1111-1111-111111111111", "fileName": "foo", "filePermission": "1000"}]`,
 			wantErrSub: "filePermission",
 		},
+		{
+			name:       "entry with world-writable filePermission",
+			objects:    `[{"bwSecretId": "11111111-1111-1111-1111-111111111111", "fileName": "foo", "filePermission": "0777"}]`,
+			wantErrSub: "filePermission",
+		},
+		{
+			name:       "entry with group-readable-only filePermission",
+			objects:    `[{"bwSecretId": "11111111-1111-1111-1111-111111111111", "fileName": "foo", "filePermission": "0040"}]`,
+			wantErrSub: "filePermission",
+		},
+		{
+			name: "duplicate fileName across entries",
+			objects: `[
+				{"bwSecretId": "11111111-1111-1111-1111-111111111111", "fileName": "creds"},
+				{"bwSecretId": "33333333-3333-3333-3333-333333333333", "fileName": "creds"}
+			]`,
+			wantErrSub: "duplicates",
+		},
 	}
 
 	for _, tc := range testCases {

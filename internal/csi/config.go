@@ -38,24 +38,33 @@ const (
 	defaultIdentityURL = "https://identity.bitwarden.com"
 )
 
-// maxFilePermission is the largest valid octal permission bits value
-// (rwxrwxrwx) that a filePermission entry may specify.
-const maxFilePermission = 0o777
+// maxFilePermission is the largest valid octal permission bits value that a
+// filePermission entry may specify. Secret contents are written to these
+// files, so group and other bits (read, write, or execute) are disallowed;
+// only the owner read/write bits (0600) may be granted.
+const maxFilePermission = 0o600
 
 // ObjectEntry is a single entry in the "objects" SecretProviderClass
-// parameter. It mirrors the semantics of api/v1.SecretMap: a Bitwarden
-// Secrets Manager secret is identified either by its ID (BwSecretID) or by
-// its name (SecretName), and is written out as a file named FileName in the
-// CSI volume. FilePermission optionally overrides the permission bits the
-// file is created with.
+// parameter. A Bitwarden Secrets Manager secret is identified either by its
+// ID (BwSecretID) or by its name (SecretName), and is written out as a file
+// named FileName in the CSI volume. FilePermission optionally overrides the
+// permission bits the file is created with.
+//
+// Unlike api/v1.SecretMap (which only supports identifying a secret by
+// BwSecretId), SecretName is a by-name lookup with no existing counterpart
+// elsewhere in this codebase. Secrets Manager secret names are not
+// guaranteed unique, so the (not yet implemented) mount logic that resolves
+// SecretName to a secret must define and enforce its own uniqueness/
+// ambiguity handling; it must not assume name resolution is already solved
+// or that names are unique the way BwSecretID is.
 type ObjectEntry struct {
 	// BwSecretID is the Secrets Manager secret ID (UUID) to mount. Exactly
 	// one of BwSecretID or SecretName must be set.
 	BwSecretID string `json:"bwSecretId,omitempty"`
 	// SecretName is the Secrets Manager secret name to mount. Exactly one of
-	// BwSecretID or SecretName must be set. Names must be unique across all
-	// secrets accessible by the machine account, mirroring the
-	// UseSecretNames semantics on BitwardenSecretSpec.
+	// BwSecretID or SecretName must be set. See the ObjectEntry doc comment:
+	// this is a new by-name identifier with no existing resolution logic or
+	// uniqueness guarantee elsewhere in the codebase.
 	SecretName string `json:"secretName,omitempty"`
 	// FileName is the name of the file written into the CSI volume for this
 	// secret. Required.
@@ -149,17 +158,27 @@ func parseObjects(raw string) ([]ObjectEntry, error) {
 		return nil, fmt.Errorf("parameters: objects must contain at least one entry")
 	}
 
+	seenFileNames := make(map[string]int, len(entries))
+
 	for i, entry := range entries {
 		if err := validateObjectEntry(entry); err != nil {
 			return nil, fmt.Errorf("parameters: objects[%d]: %w", i, err)
 		}
+
+		fileName := strings.TrimSpace(entry.FileName)
+		if j, ok := seenFileNames[fileName]; ok {
+			return nil, fmt.Errorf("parameters: objects[%d]: fileName %q duplicates objects[%d]; fileName must be unique across all entries", i, entry.FileName, j)
+		}
+
+		seenFileNames[fileName] = i
 	}
 
 	return entries, nil
 }
 
-// validateObjectEntry validates a single ObjectEntry, mirroring the
-// bwSecretId/secretName identification semantics of api/v1.SecretMap.
+// validateObjectEntry validates a single ObjectEntry: exactly one of
+// bwSecretId or secretName must identify the secret to mount (see the
+// ObjectEntry doc comment for how secretName differs from api/v1.SecretMap).
 func validateObjectEntry(entry ObjectEntry) error {
 	bwSecretID := strings.TrimSpace(entry.BwSecretID)
 	secretName := strings.TrimSpace(entry.SecretName)
@@ -185,16 +204,17 @@ func validateObjectEntry(entry ObjectEntry) error {
 }
 
 // parseFilePermission parses permission as an octal file mode string (e.g.
-// "0600" or "600") and validates it is within the valid permission bits
-// range.
+// "0600" or "600") and validates it only grants owner read/write bits
+// (maxFilePermission), rejecting any group or other bits so secret contents
+// cannot be made group- or world-readable/writable.
 func parseFilePermission(permission string) (uint32, error) {
 	value, err := strconv.ParseUint(permission, 8, 32)
 	if err != nil {
 		return 0, fmt.Errorf("must be an octal permission string: %w", err)
 	}
 
-	if value > maxFilePermission {
-		return 0, fmt.Errorf("must be between 0 and 0777")
+	if value&^uint64(maxFilePermission) != 0 {
+		return 0, fmt.Errorf("must not grant permissions beyond 0600 (owner read/write only)")
 	}
 
 	return uint32(value), nil
