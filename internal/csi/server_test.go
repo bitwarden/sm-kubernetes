@@ -31,7 +31,9 @@ import (
 
 	"github.com/go-logr/logr"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/status"
 
 	sdk "github.com/bitwarden/sdk-go/v2"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
@@ -201,6 +203,51 @@ func TestServerMountEndToEnd(t *testing.T) {
 
 	if factory.creationCalls() != 1 {
 		t.Errorf("client factory invoked %d times, want 1 (the logged-in session should be cached/reused)", factory.creationCalls())
+	}
+}
+
+// TestRecoveryUnaryInterceptorRecoversPanic verifies that a panic raised by
+// an RPC handler is recovered into a codes.Internal error rather than
+// propagating and crashing the process, since this provider runs as a
+// single-instance-per-node DaemonSet.
+func TestRecoveryUnaryInterceptorRecoversPanic(t *testing.T) {
+	interceptor := recoveryUnaryInterceptor(testLogger())
+
+	panicHandler := func(_ context.Context, _ any) (any, error) {
+		panic("boom")
+	}
+
+	resp, err := interceptor(context.Background(), nil, &grpc.UnaryServerInfo{FullMethod: "/test.Method"}, panicHandler)
+	if resp != nil {
+		t.Errorf("resp = %v, want nil", resp)
+	}
+
+	if err == nil {
+		t.Fatal("interceptor unexpectedly returned no error after a panicking handler")
+	}
+
+	if status.Code(err) != codes.Internal {
+		t.Errorf("error code = %v, want %v", status.Code(err), codes.Internal)
+	}
+}
+
+// TestRecoveryUnaryInterceptorPassesThroughNonPanickingCalls verifies that
+// the interceptor is a no-op for handlers that don't panic.
+func TestRecoveryUnaryInterceptorPassesThroughNonPanickingCalls(t *testing.T) {
+	interceptor := recoveryUnaryInterceptor(testLogger())
+
+	wantResp := "ok"
+	handler := func(_ context.Context, _ any) (any, error) {
+		return wantResp, nil
+	}
+
+	resp, err := interceptor(context.Background(), nil, &grpc.UnaryServerInfo{FullMethod: "/test.Method"}, handler)
+	if err != nil {
+		t.Fatalf("interceptor returned unexpected error: %v", err)
+	}
+
+	if resp != wantResp {
+		t.Errorf("resp = %v, want %v", resp, wantResp)
 	}
 }
 

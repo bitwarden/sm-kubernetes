@@ -24,6 +24,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 )
@@ -36,6 +37,28 @@ import (
 const (
 	defaultAPIURL      = "https://api.bitwarden.com"
 	defaultIdentityURL = "https://identity.bitwarden.com"
+)
+
+// allowedAPIURLsEnvVar and allowedIdentityURLsEnvVar name the environment
+// variables an operator sets on the provider Deployment/DaemonSet (e.g. via
+// the Helm chart) to permit specific apiUrl/identityUrl overrides -- for
+// example a self-hosted Bitwarden instance's URLs -- in a
+// SecretProviderClass. Each holds a comma-separated list of exact URLs.
+//
+// Unlike defaultAPIURL/defaultIdentityURL, the apiUrl/identityUrl
+// SecretProviderClass parameters come from a namespaced, tenant-editable
+// resource, yet are used as the destination for the pod's
+// nodePublishSecretRef Secrets Manager access token login and all
+// subsequent API calls. Without this operator-controlled allowlist, anyone
+// who can create/edit a SecretProviderClass could redirect that token to an
+// attacker-controlled host. This restores the same trust boundary
+// cmd.GetSettings enforces for the controller (BW_API_URL /
+// BW_IDENTITY_API_URL are operator-deployment-level environment
+// variables), expressed as an allowlist since a single provider instance
+// serves every SecretProviderClass on its node.
+const (
+	allowedAPIURLsEnvVar      = "BW_CSI_ALLOWED_API_URLS"
+	allowedIdentityURLsEnvVar = "BW_CSI_ALLOWED_IDENTITY_URLS"
 )
 
 // maxFilePermission is the largest valid octal permission bits value that a
@@ -124,12 +147,12 @@ func ParseParameters(attributesJSON string) (*Parameters, error) {
 		return nil, err
 	}
 
-	apiURL, err := resolveURL(attrs["apiUrl"], defaultAPIURL, "apiUrl")
+	apiURL, err := resolveURL(attrs["apiUrl"], defaultAPIURL, "apiUrl", allowedURLsFromEnv(allowedAPIURLsEnvVar))
 	if err != nil {
 		return nil, err
 	}
 
-	identityURL, err := resolveURL(attrs["identityUrl"], defaultIdentityURL, "identityUrl")
+	identityURL, err := resolveURL(attrs["identityUrl"], defaultIdentityURL, "identityUrl", allowedURLsFromEnv(allowedIdentityURLsEnvVar))
 	if err != nil {
 		return nil, err
 	}
@@ -223,8 +246,11 @@ func parseFilePermission(permission string) (uint32, error) {
 // resolveURL applies the fallback default when raw is empty, and otherwise
 // validates raw is an absolute URL with both a scheme and a host, mirroring
 // the validation cmd.GetSettings performs on BW_API_URL /
-// BW_IDENTITY_API_URL.
-func resolveURL(raw, fallback, fieldName string) (string, error) {
+// BW_IDENTITY_API_URL. A non-empty, well-formed raw value is only accepted
+// if it exactly matches fallback or is present in allowed (see
+// allowedURLsFromEnv); this prevents a SecretProviderClass from redirecting
+// the Secrets Manager access token to an operator-untrusted host.
+func resolveURL(raw, fallback, fieldName string, allowed map[string]struct{}) (string, error) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
 		return fallback, nil
@@ -239,5 +265,28 @@ func resolveURL(raw, fallback, fieldName string) (string, error) {
 		return "", fmt.Errorf("parameters: %s is not a valid URL: %w", fieldName, err)
 	}
 
+	if raw != fallback {
+		if _, ok := allowed[raw]; !ok {
+			return "", fmt.Errorf("parameters: %s %q is not the default URL and is not present in the operator-configured allowlist", fieldName, raw)
+		}
+	}
+
 	return raw, nil
+}
+
+// allowedURLsFromEnv parses envVar's value as a comma-separated list of
+// exact URLs an operator has opted into allowing as apiUrl/identityUrl
+// SecretProviderClass overrides (e.g. for a self-hosted Bitwarden
+// instance), returning an empty (non-nil) set if envVar is unset or empty.
+func allowedURLsFromEnv(envVar string) map[string]struct{} {
+	allowed := make(map[string]struct{})
+
+	for _, entry := range strings.Split(os.Getenv(envVar), ",") {
+		entry = strings.TrimSpace(entry)
+		if entry != "" {
+			allowed[entry] = struct{}{}
+		}
+	}
+
+	return allowed
 }

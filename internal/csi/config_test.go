@@ -97,6 +97,12 @@ func TestParseParametersValidInput(t *testing.T) {
 }
 
 func TestParseParametersValidInputWithURLOverrides(t *testing.T) {
+	// apiUrl/identityUrl overrides are only honored when the operator has
+	// explicitly allowlisted them (e.g. for a self-hosted Bitwarden
+	// instance); see allowedURLsFromEnv.
+	t.Setenv(allowedAPIURLsEnvVar, "https://api.bitwarden.eu")
+	t.Setenv(allowedIdentityURLsEnvVar, "https://identity.bitwarden.eu")
+
 	objects := []ObjectEntry{
 		{BwSecretID: "11111111-1111-1111-1111-111111111111", FileName: "db-password"},
 	}
@@ -119,6 +125,40 @@ func TestParseParametersValidInputWithURLOverrides(t *testing.T) {
 
 	if params.IdentityURL != "https://identity.bitwarden.eu" {
 		t.Errorf("IdentityURL = %q, want %q", params.IdentityURL, "https://identity.bitwarden.eu")
+	}
+}
+
+// TestParseParametersURLOverrideNotAllowlisted verifies that an apiUrl/
+// identityUrl override is rejected unless it matches the default or is
+// present in the operator-configured allowlist, so a SecretProviderClass
+// cannot redirect the Secrets Manager access token to an arbitrary host.
+func TestParseParametersURLOverrideNotAllowlisted(t *testing.T) {
+	objects := []ObjectEntry{
+		{BwSecretID: "11111111-1111-1111-1111-111111111111", FileName: "db-password"},
+	}
+
+	testCases := map[string]string{
+		"apiUrl":      "https://attacker.example.com",
+		"identityUrl": "https://attacker.example.com",
+	}
+
+	for field, value := range testCases {
+		t.Run(field, func(t *testing.T) {
+			attrs := buildAttributes(t, map[string]string{
+				"organizationId": "22222222-2222-2222-2222-222222222222",
+				"objects":        objectsJSON(t, objects),
+				field:            value,
+			})
+
+			_, err := ParseParameters(attrs)
+			if err == nil {
+				t.Fatal("ParseParameters unexpectedly succeeded with a non-allowlisted URL override")
+			}
+
+			if !strings.Contains(err.Error(), "allowlist") {
+				t.Errorf("error = %q, want mention of allowlist", err.Error())
+			}
+		})
 	}
 }
 

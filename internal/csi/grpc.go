@@ -26,10 +26,13 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 	"time"
 
 	"github.com/go-logr/logr"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	pb "sigs.k8s.io/secrets-store-csi-driver/provider/v1alpha1"
 )
@@ -80,10 +83,35 @@ func Listen(socketPath string, log logr.Logger) (net.Listener, error) {
 	return listener, nil
 }
 
+// recoveryUnaryInterceptor returns a grpc.UnaryServerInterceptor that
+// recovers from any panic raised by an RPC handler, logs it (including a
+// stack trace) via log, and converts it into a codes.Internal gRPC error.
+//
+// This provider runs as a DaemonSet with a single instance per node, so an
+// unrecovered panic inside one RPC handler (e.g. a nil dereference while
+// parsing a malformed SecretProviderClass) would otherwise crash the entire
+// process, failing every pod mount on that node until the container is
+// restarted. Recovering keeps a single bad request from taking down mounts
+// for the whole node.
+func recoveryUnaryInterceptor(log logr.Logger) grpc.UnaryServerInterceptor {
+	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp any, err error) {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Error(fmt.Errorf("panic: %v", r), "recovered from panic in RPC handler", "method", info.FullMethod, "stack", string(debug.Stack()))
+				err = status.Error(codes.Internal, "internal error")
+			}
+		}()
+
+		return handler(ctx, req)
+	}
+}
+
 // NewGRPCServer builds a *grpc.Server with srv registered as the
-// CSIDriverProvider implementation.
-func NewGRPCServer(srv pb.CSIDriverProviderServer) *grpc.Server {
-	grpcServer := grpc.NewServer()
+// CSIDriverProvider implementation. Every RPC is wrapped with a
+// panic-recovery interceptor (see recoveryUnaryInterceptor) so a panic in
+// any single handler cannot crash the process.
+func NewGRPCServer(srv pb.CSIDriverProviderServer, log logr.Logger) *grpc.Server {
+	grpcServer := grpc.NewServer(grpc.UnaryInterceptor(recoveryUnaryInterceptor(log)))
 	pb.RegisterCSIDriverProviderServer(grpcServer, srv)
 
 	return grpcServer
@@ -101,7 +129,7 @@ func Run(ctx context.Context, socketPath string, log logr.Logger) error {
 	srv := NewServer(log)
 	defer srv.Close()
 
-	grpcServer := NewGRPCServer(srv)
+	grpcServer := NewGRPCServer(srv, log)
 
 	errCh := make(chan error, 1)
 	go func() {
