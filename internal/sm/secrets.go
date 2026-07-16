@@ -93,11 +93,17 @@ func PullSecretManagerSecretDeltas(factory BitwardenClientFactory, statePath str
 		logger.Error(err, "Failed to create client")
 		return false, nil, err
 	}
+	defer bitwardenClient.Close()
 
 	err = bitwardenClient.AccessTokenLogin(authToken, &statePath)
 	if err != nil {
+		// Log the full SDK error only to the operator logs. The error returned here
+		// propagates into the BitwardenSecret's status.conditions, which is persisted
+		// to the K8s API and may be readable by a broader audience than the RBAC scope
+		// protecting the raw auth-token Secret, so avoid surfacing raw SDK/auth error
+		// text (which may echo back sensitive request details) there.
 		logger.Error(err, "Failed to authenticate")
-		return false, nil, err
+		return false, nil, errors.New("failed to authenticate to Bitwarden Secrets Manager; see operator logs for details")
 	}
 
 	secrets := map[string][]byte{}
@@ -132,7 +138,6 @@ func PullSecretManagerSecretDeltas(factory BitwardenClientFactory, statePath str
 		for _, smSecretVal := range smSecretVals {
 			secrets[smSecretVal.ID] = []byte(smSecretVal.Value)
 		}
-		defer bitwardenClient.Close()
 		return smSecretResponse.HasChanges, secrets, nil
 	}
 
@@ -171,7 +176,6 @@ func PullSecretManagerSecretDeltas(factory BitwardenClientFactory, statePath str
 		}
 		errMsg += "\nKubernetes secret data keys must consist of alphanumeric characters, '-', '_', or '.'"
 
-		defer bitwardenClient.Close()
 		return false, nil, errors.New(errMsg)
 	}
 
@@ -192,7 +196,6 @@ func PullSecretManagerSecretDeltas(factory BitwardenClientFactory, statePath str
 		}
 		errMsg += "\nMultiple secrets with the same name. Use unique names for secrets or disable useSecretNames."
 
-		defer bitwardenClient.Close()
 		return false, nil, errors.New(errMsg)
 	}
 
@@ -201,7 +204,6 @@ func PullSecretManagerSecretDeltas(factory BitwardenClientFactory, statePath str
 		secrets[smSecretVal.Key] = []byte(smSecretVal.Value)
 	}
 
-	defer bitwardenClient.Close()
 	return smSecretResponse.HasChanges, secrets, nil
 }
 

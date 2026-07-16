@@ -33,6 +33,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
@@ -240,6 +241,10 @@ func (r *BitwardenSecretReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&operatorsv1.BitwardenSecret{}).
+		// All BitwardenSecret CRs share a single on-disk state file (r.StatePath) with
+		// no locking. Reconciles must stay serialized to avoid concurrent
+		// AccessTokenLogin calls for different orgs/tokens racing on that file.
+		WithOptions(controller.Options{MaxConcurrentReconciles: 1}).
 		Complete(r)
 }
 
