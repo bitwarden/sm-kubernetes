@@ -97,6 +97,66 @@ placeholder (`localhost/sm-csi-provider:1.0.0`) built via
 
 See [`chart/README.md`](chart/README.md).
 
+## Optional: syncing to a Kubernetes Secret (`secretObjects`)
+
+By default, this provider only ever writes secrets to files inside the
+CSI volume mounted into a Pod's containers -- nothing is persisted to the
+Kubernetes API or to etcd, and the secret material disappears with the
+Pod. That mount-only behavior is the whole point of using this provider
+instead of a plain `v1.Secret`, and it is what
+[`secretproviderclass-sample.yaml`](secretproviderclass-sample.yaml)
+demonstrates.
+
+The upstream secrets-store-csi-driver separately supports an **optional**
+`spec.secretObjects` field on `SecretProviderClass` that mirrors the
+mounted objects into a regular `v1.Secret`, so they can also be consumed
+as environment variables. This provider does not implement or parse
+`secretObjects` itself -- it is entirely a feature of the upstream driver,
+which reads the files this provider wrote and creates/updates the Secret
+from them.
+
+**This is explicitly opt-in and is not used by anything in this repo's
+sample manifests.** Turning it on reintroduces exactly the thing this CSI
+provider exists to avoid: a copy of the secret that outlives the Pod
+mount, stored in the Kubernetes API and persisted in etcd for as long as
+the Secret object exists, rather than being scoped to the lifetime of the
+mounting Pod. Only enable it if you have a concrete need to consume a
+secret as an env var (or otherwise via the Kubernetes API) and accept
+that tradeoff.
+
+If you do choose to enable it:
+
+```yaml
+apiVersion: secrets-store.csi.x-k8s.io/v1
+kind: SecretProviderClass
+metadata:
+  name: bitwarden-secrets
+spec:
+  provider: bitwarden
+  parameters:
+    organizationId: "a08a8157-129e-4002-bab4-b118014ca9c7"
+    objects: |
+      [
+        { "bwSecretId": "e30f88bd-9e9c-42ae-83b7-b155012da672", "fileName": "db-password" }
+      ]
+  # Optional and NOT recommended by default -- see above. Mirrors the
+  # mounted object(s) above into a regular Kubernetes Secret.
+  secretObjects:
+    - secretName: bitwarden-synced-secret
+      type: Opaque
+      data:
+        - objectName: db-password
+          key: db-password
+```
+
+Rotation of the synced Secret additionally requires the upstream driver to
+be installed with `--enable-secret-rotation` (see
+[Prerequisite: the upstream driver](#prerequisite-the-upstream-driver)
+above) and, separately from this provider's own RBAC, its own permissions
+to create/update Secrets against the Kubernetes API -- consult the
+[upstream `secretObjects` docs](https://secrets-store-csi-driver.sigs.k8s.io/topics/sync-as-kubernetes-secret)
+for the driver-side RBAC and rotation requirements.
+
 ## Building the provider image
 
 The provider links the same Bitwarden SDK C library
