@@ -116,7 +116,7 @@ func TestListenRemovesStaleSocket(t *testing.T) {
 	}
 	stale.Close()
 
-	listener, err := Listen(socketPath)
+	listener, err := Listen(socketPath, testLogger())
 	if err != nil {
 		t.Fatalf("Listen returned error: %v", err)
 	}
@@ -124,6 +124,47 @@ func TestListenRemovesStaleSocket(t *testing.T) {
 
 	if listener.Addr().String() != socketPath {
 		t.Errorf("listener address = %q, want %q", listener.Addr().String(), socketPath)
+	}
+}
+
+// TestListenSetsRestrictiveSocketPermissions verifies that Listen locks down
+// the socket file's permission bits instead of relying on the process umask.
+func TestListenSetsRestrictiveSocketPermissions(t *testing.T) {
+	dir := shortTempDir(t)
+	socketPath := filepath.Join(dir, "bitwarden.sock")
+
+	listener, err := Listen(socketPath, testLogger())
+	if err != nil {
+		t.Fatalf("Listen returned error: %v", err)
+	}
+	defer listener.Close()
+
+	info, err := os.Stat(socketPath)
+	if err != nil {
+		t.Fatalf("failed to stat socket: %v", err)
+	}
+
+	if perm := info.Mode().Perm(); perm != 0600 {
+		t.Errorf("socket permissions = %o, want %o", perm, 0600)
+	}
+}
+
+// TestListenRefusesNonSocketFile verifies that Listen does not blindly
+// remove an unexpected pre-existing file at socketPath.
+func TestListenRefusesNonSocketFile(t *testing.T) {
+	dir := shortTempDir(t)
+	socketPath := filepath.Join(dir, "bitwarden.sock")
+
+	if err := os.WriteFile(socketPath, []byte("not a socket"), 0600); err != nil {
+		t.Fatalf("failed to create non-socket file: %v", err)
+	}
+
+	if _, err := Listen(socketPath, testLogger()); err == nil {
+		t.Fatal("Listen unexpectedly succeeded against a non-socket file")
+	}
+
+	if _, err := os.Stat(socketPath); err != nil {
+		t.Errorf("expected non-socket file to remain, but it was removed: %v", err)
 	}
 }
 

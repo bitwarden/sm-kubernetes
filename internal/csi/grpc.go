@@ -26,6 +26,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/go-logr/logr"
 	"google.golang.org/grpc"
@@ -33,22 +34,47 @@ import (
 	pb "sigs.k8s.io/secrets-store-csi-driver/provider/v1alpha1"
 )
 
+// socketMode is the permission bits applied to the Unix Domain Socket file
+// after binding, so that access to this IPC channel does not depend on the
+// process umask or the parent directory's permissions.
+const socketMode = 0600
+
+// gracefulShutdownTimeout bounds how long Run waits for in-flight RPCs to
+// finish during a graceful shutdown before forcibly stopping the server.
+const gracefulShutdownTimeout = 5 * time.Second
+
 // Listen creates a Unix Domain Socket listener at socketPath. It ensures the
 // parent directory exists and removes any stale socket file left behind by a
-// previous run before binding.
-func Listen(socketPath string) (net.Listener, error) {
+// previous run before binding. The resulting socket file is chmod'd to
+// socketMode so access does not depend on the process umask.
+func Listen(socketPath string, log logr.Logger) (net.Listener, error) {
 	dir := filepath.Dir(socketPath)
 	if err := os.MkdirAll(dir, 0750); err != nil {
 		return nil, fmt.Errorf("failed to create socket directory %s: %w", dir, err)
 	}
 
-	if err := os.Remove(socketPath); err != nil && !os.IsNotExist(err) {
-		return nil, fmt.Errorf("failed to remove stale socket %s: %w", socketPath, err)
+	if info, err := os.Lstat(socketPath); err == nil {
+		if info.Mode()&os.ModeSocket == 0 {
+			return nil, fmt.Errorf("refusing to remove existing non-socket file at %s", socketPath)
+		}
+
+		log.Info("removing stale socket file", "endpoint", socketPath)
+
+		if err := os.Remove(socketPath); err != nil {
+			return nil, fmt.Errorf("failed to remove stale socket %s: %w", socketPath, err)
+		}
+	} else if !os.IsNotExist(err) {
+		return nil, fmt.Errorf("failed to stat socket path %s: %w", socketPath, err)
 	}
 
 	listener, err := net.Listen("unix", socketPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to listen on %s: %w", socketPath, err)
+	}
+
+	if err := os.Chmod(socketPath, socketMode); err != nil {
+		listener.Close()
+		return nil, fmt.Errorf("failed to set permissions on socket %s: %w", socketPath, err)
 	}
 
 	return listener, nil
@@ -67,7 +93,7 @@ func NewGRPCServer(srv pb.CSIDriverProviderServer) *grpc.Server {
 // socketPath and serves requests until ctx is cancelled or the server
 // encounters an unrecoverable error. It blocks until one of those occurs.
 func Run(ctx context.Context, socketPath string, log logr.Logger) error {
-	listener, err := Listen(socketPath)
+	listener, err := Listen(socketPath, log)
 	if err != nil {
 		return err
 	}
@@ -82,7 +108,20 @@ func Run(ctx context.Context, socketPath string, log logr.Logger) error {
 	select {
 	case <-ctx.Done():
 		log.Info("shutting down provider server", "endpoint", socketPath)
-		grpcServer.GracefulStop()
+
+		stopped := make(chan struct{})
+		go func() {
+			grpcServer.GracefulStop()
+			close(stopped)
+		}()
+
+		select {
+		case <-stopped:
+		case <-time.After(gracefulShutdownTimeout):
+			log.Info("graceful shutdown timed out, forcing stop", "endpoint", socketPath)
+			grpcServer.Stop()
+		}
+
 		return nil
 	case err := <-errCh:
 		return err
