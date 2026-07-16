@@ -148,6 +148,10 @@ func (s *Server) Mount(ctx context.Context, req *pb.MountRequest) (*pb.MountResp
 		s.Log.Error(err, "mount failed: could not initialize secrets manager session", "organizationId", params.OrganizationID)
 		return nil, status.Error(codes.Internal, "failed to initialize a Bitwarden Secrets Manager session")
 	}
+	// entry is pinned by getOrCreate against concurrent cache eviction; release
+	// it once this call is done using it, regardless of outcome, so eviction
+	// of this session (once it's no longer in use) can proceed.
+	defer entry.release()
 
 	byID, byName, err := entry.sync(ctx)
 	if err != nil {

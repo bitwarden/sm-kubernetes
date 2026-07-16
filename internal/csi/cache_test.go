@@ -140,6 +140,11 @@ func TestCacheBoundedEvictionClosesOldestEntry(t *testing.T) {
 	oldStateDir := oldEntry.stateDir
 	oldClient := factory.clientAt(0)
 
+	// Simulate the Mount call that obtained oldEntry finishing its use of it,
+	// so eviction below is free to clean it up immediately instead of
+	// deferring cleanup until release (see smCacheEntry.acquire/release).
+	oldEntry.release()
+
 	if _, err := os.Stat(oldStateDir); err != nil {
 		t.Fatalf("expected state dir to exist before eviction: %v", err)
 	}
@@ -173,6 +178,59 @@ func TestCacheBoundedEvictionClosesOldestEntry(t *testing.T) {
 	}
 }
 
+// TestCacheEvictionDefersCleanupWhileEntryInUse verifies that bounded-LRU
+// eviction never closes a cache entry's client or removes its state
+// directory while a goroutine is still pinning that entry (as Server.Mount
+// does between getOrCreate and release), even though the entry has already
+// been evicted from the cache's index. This guards against the use-after-
+// free/torn-state races that would otherwise occur if eviction closed a
+// client and removed a state directory a concurrent doSync/ensureLoggedIn
+// call was still using.
+func TestCacheEvictionDefersCleanupWhileEntryInUse(t *testing.T) {
+	factory := newFakeClientFactory(noopSync)
+	cache := newTestCache(t, 1, defaultCacheIdleTimeout, factory)
+
+	oldEntry, err := cache.getOrCreate("org-1", "token-a", "https://api", "https://identity")
+	if err != nil {
+		t.Fatalf("getOrCreate returned unexpected error: %v", err)
+	}
+
+	if _, _, err := oldEntry.sync(context.Background()); err != nil {
+		t.Fatalf("sync returned unexpected error: %v", err)
+	}
+
+	oldStateDir := oldEntry.stateDir
+	oldClient := factory.clientAt(0)
+
+	// oldEntry is still pinned by the getOrCreate call above (as it would be
+	// for the duration of an in-flight Mount call); do not release it yet.
+
+	// A second, different key exceeds the cache's capacity of 1, evicting
+	// oldEntry from the cache's index.
+	if _, err := cache.getOrCreate("org-2", "token-b", "https://api", "https://identity"); err != nil {
+		t.Fatalf("getOrCreate returned unexpected error: %v", err)
+	}
+
+	if oldClient.isClosed() {
+		t.Error("evicted-but-still-pinned entry's client was closed while a caller was still using it")
+	}
+
+	if _, err := os.Stat(oldStateDir); err != nil {
+		t.Errorf("evicted-but-still-pinned entry's state dir was removed while a caller was still using it: %v", err)
+	}
+
+	// Releasing the last pin now performs the deferred cleanup.
+	oldEntry.release()
+
+	if !oldClient.isClosed() {
+		t.Error("expected client to be closed once the last pin was released")
+	}
+
+	if _, err := os.Stat(oldStateDir); !os.IsNotExist(err) {
+		t.Errorf("expected state dir to be removed once the last pin was released, stat err = %v", err)
+	}
+}
+
 // TestCacheIdleEviction verifies that an entry unused for longer than the
 // configured idle timeout is evicted (and its resources released) even
 // without the cache being at capacity.
@@ -190,6 +248,11 @@ func TestCacheIdleEviction(t *testing.T) {
 	}
 
 	oldClient := factory.clientAt(0)
+
+	// Simulate the Mount call that obtained entry finishing its use of it, so
+	// idle eviction below is free to clean it up immediately instead of
+	// deferring cleanup until release (see smCacheEntry.acquire/release).
+	entry.release()
 
 	time.Sleep(10 * time.Millisecond)
 

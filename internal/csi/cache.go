@@ -124,44 +124,67 @@ func (c *smClientCache) getOrCreate(orgID, token, apiURL, identityURL string) (*
 	key := cacheKey{orgID: orgID, tokenHash: hashToken(token)}
 
 	c.mu.Lock()
-	defer c.mu.Unlock()
 
-	c.evictIdleLocked()
+	pending := c.evictIdleLocked()
 
 	if elem, ok := c.entries[key]; ok {
 		c.lru.MoveToFront(elem)
 		entry := elem.Value.(*smCacheEntry)
 		entry.touch()
+		entry.acquire()
+		c.mu.Unlock()
+
+		cleanupEntries(pending)
+
 		return entry, nil
 	}
 
 	for c.lru.Len() >= c.maxEntries {
-		c.evictOldestLocked()
+		if evicted := c.evictOldestLocked(); evicted != nil {
+			pending = append(pending, evicted)
+		}
 	}
 
 	stateDir := filepath.Join(c.baseStateDir, uuid.NewString())
 	if err := os.MkdirAll(stateDir, 0700); err != nil {
+		c.mu.Unlock()
+
+		cleanupEntries(pending)
+
 		return nil, fmt.Errorf("failed to create isolated state directory: %w", err)
 	}
 
 	factory := c.newFactory(apiURL, identityURL)
 	entry := newSMCacheEntry(key, stateDir, factory, token)
 	entry.touch()
+	entry.acquire()
 
 	elem := c.lru.PushFront(entry)
 	c.entries[key] = elem
 
+	c.mu.Unlock()
+
+	cleanupEntries(pending)
+
 	return entry, nil
 }
 
-// evictIdleLocked removes and cleans up entries that have not been used
-// within idleTimeout. c.mu must be held.
-func (c *smClientCache) evictIdleLocked() {
+// evictIdleLocked removes entries that have not been used within
+// idleTimeout from the cache's index and returns those that are safe to
+// clean up immediately (i.e. not currently pinned by an in-flight sync).
+// Entries that are still pinned are marked for cleanup once they are
+// released. c.mu must be held. The caller is responsible for calling
+// cleanupEntries on the returned slice after releasing c.mu, so that the
+// (potentially slow) client Close()/directory removal I/O never runs while
+// other callers are blocked on the cache-wide lock.
+func (c *smClientCache) evictIdleLocked() []*smCacheEntry {
 	if c.idleTimeout <= 0 {
-		return
+		return nil
 	}
 
 	now := time.Now()
+
+	var pending []*smCacheEntry
 
 	for elem := c.lru.Back(); elem != nil; {
 		entry := elem.Value.(*smCacheEntry)
@@ -170,38 +193,78 @@ func (c *smClientCache) evictIdleLocked() {
 		}
 
 		prev := elem.Prev()
-		c.removeLocked(elem)
+		if evicted := c.removeLocked(elem); evicted != nil {
+			pending = append(pending, evicted)
+		}
 		elem = prev
 	}
+
+	return pending
 }
 
-// evictOldestLocked evicts the least-recently-used entry. c.mu must be held.
-func (c *smClientCache) evictOldestLocked() {
+// evictOldestLocked evicts the least-recently-used entry, returning it if it
+// is safe to clean up immediately (see evictIdleLocked). c.mu must be held.
+func (c *smClientCache) evictOldestLocked() *smCacheEntry {
 	if elem := c.lru.Back(); elem != nil {
-		c.removeLocked(elem)
+		return c.removeLocked(elem)
 	}
+
+	return nil
 }
 
-// removeLocked removes elem from the cache and releases its resources.
+// removeLocked removes elem from the cache's index. If no goroutine is
+// currently using the entry (see smCacheEntry.acquire/release), it returns
+// the entry so the caller can clean it up (Close the SDK client, remove its
+// state directory) after releasing c.mu. If the entry is still pinned, it is
+// instead marked for cleanup once its last user releases it, so that
+// eviction never closes a client or removes a state directory out from
+// under a goroutine still using it (e.g. inside doSync/ensureLoggedIn).
 // c.mu must be held.
-func (c *smClientCache) removeLocked(elem *list.Element) {
+func (c *smClientCache) removeLocked(elem *list.Element) *smCacheEntry {
 	entry := elem.Value.(*smCacheEntry)
 	delete(c.entries, entry.key)
 	c.lru.Remove(elem)
-	entry.closeAndCleanup()
+
+	if entry.markRemoved() {
+		return entry
+	}
+
+	return nil
+}
+
+// cleanupEntries closes and cleans up every entry in entries. It must only
+// ever be called outside of c.mu, since closeAndCleanup performs blocking
+// I/O (an SDK client Close and a directory removal).
+func cleanupEntries(entries []*smCacheEntry) {
+	for _, entry := range entries {
+		entry.closeAndCleanup()
+	}
 }
 
 // Close evicts and cleans up every cache entry. It is intended to be called
 // once, on provider shutdown.
 func (c *smClientCache) Close() {
 	c.mu.Lock()
-	defer c.mu.Unlock()
+
+	var pending []*smCacheEntry
 
 	for elem := c.lru.Front(); elem != nil; {
 		next := elem.Next()
-		c.removeLocked(elem)
+		if evicted := c.removeLocked(elem); evicted != nil {
+			pending = append(pending, evicted)
+		}
 		elem = next
 	}
+
+	c.mu.Unlock()
+
+	cleanupEntries(pending)
+
+	// baseStateDir is created solely to hold this cache's per-entry state
+	// subdirectories (see newSMClientCache); once every entry has been
+	// cleaned up above, nothing else uses it, so remove it too rather than
+	// leaking an empty directory on every provider restart.
+	_ = os.RemoveAll(c.baseStateDir)
 }
 
 // smCacheEntry is a single cached Secrets Manager session: a logged-in SDK
@@ -224,6 +287,19 @@ type smCacheEntry struct {
 	initMu   sync.Mutex
 	client   sdk.BitwardenClientInterface
 	loggedIn bool
+
+	// refMu guards refCount/removed, which together pin this entry against
+	// concurrent cleanup: the cache increments refCount (via acquire) for
+	// every getOrCreate call that hands out this entry, and the holder calls
+	// release exactly once when it's done using it (see Server.Mount). If
+	// the cache evicts the entry while refCount > 0, removeLocked marks it
+	// removed instead of cleaning it up immediately; the last release then
+	// performs the deferred cleanup. This prevents eviction from Close()ing
+	// the SDK client or removing the state directory while a concurrent
+	// doSync/ensureLoggedIn call is still using them.
+	refMu    sync.Mutex
+	refCount int
+	removed  bool
 
 	// mu guards the synced secrets snapshot and single-flight state below.
 	mu       sync.Mutex
@@ -264,9 +340,47 @@ func (e *smCacheEntry) lastUsed() time.Time {
 	return e.lastUsedAt
 }
 
+// acquire pins the entry against cleanup: as long as the number of
+// acquire calls exceeds the number of release calls, the cache will defer
+// closeAndCleanup even if the entry is evicted. It is called once per
+// getOrCreate call that hands out this entry.
+func (e *smCacheEntry) acquire() {
+	e.refMu.Lock()
+	e.refCount++
+	e.refMu.Unlock()
+}
+
+// release unpins the entry. If the entry was evicted while pinned (removed
+// is set) and this was the last outstanding pin, release performs the
+// cleanup that eviction deferred. Every acquire must be matched by exactly
+// one release.
+func (e *smCacheEntry) release() {
+	e.refMu.Lock()
+	e.refCount--
+	needCleanup := e.removed && e.refCount == 0
+	e.refMu.Unlock()
+
+	if needCleanup {
+		e.closeAndCleanup()
+	}
+}
+
+// markRemoved marks the entry as evicted from the cache's index. It returns
+// true if there are no outstanding pins, meaning the caller may (and must)
+// clean the entry up immediately; otherwise cleanup is deferred to the
+// pin-holder's release call.
+func (e *smCacheEntry) markRemoved() bool {
+	e.refMu.Lock()
+	defer e.refMu.Unlock()
+
+	e.removed = true
+
+	return e.refCount == 0
+}
+
 // closeAndCleanup releases the entry's SDK client (if one was created) and
-// removes its isolated state directory. It is called by the cache when the
-// entry is evicted.
+// removes its isolated state directory. It is called once an entry has been
+// evicted from the cache and has no outstanding pins (see acquire/release).
 func (e *smCacheEntry) closeAndCleanup() {
 	e.initMu.Lock()
 	if e.client != nil {
