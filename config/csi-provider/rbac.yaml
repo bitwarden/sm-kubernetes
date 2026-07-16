@@ -21,8 +21,10 @@
 # KEPT IN SYNC WITH: chart/templates/serviceaccount.yaml. There is no shared
 # source of truth between this plain manifest and the Helm chart template --
 # if RBAC scope changes here (e.g. a Role/RoleBinding becomes necessary),
-# mirror the same scope in the chart template. See daemonset.yaml for the
-# diff command used to check the two render equivalently.
+# mirror the same scope in the chart template. This parity (including the
+# set of RBAC object kinds rendered by each) is checked automatically by
+# config/csi-provider/parity/manifest_parity_test.go -- see daemonset.yaml
+# for the underlying diff command that test automates.
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -30,7 +32,7 @@ metadata:
   namespace: kube-system
   labels:
     app.kubernetes.io/name: serviceaccount
-    app.kubernetes.io/instance: bitwarden-csi-provider-sa
+    app.kubernetes.io/instance: bitwarden-csi-provider
     app.kubernetes.io/component: csi-provider
     app.kubernetes.io/created-by: sm-operator
     app.kubernetes.io/part-of: sm-operator

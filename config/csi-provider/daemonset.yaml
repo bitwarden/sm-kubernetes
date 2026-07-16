@@ -9,10 +9,14 @@
 # so any change to a security-relevant field below (securityContext,
 # capabilities, resources, tolerations, priorityClassName, volumes/
 # volumeMounts) must be mirrored by hand in the chart template (and its
-# chart/values.yaml defaults). Verify the two stay equivalent with:
+# chart/values.yaml defaults). This is enforced automatically by
+# config/csi-provider/parity/manifest_parity_test.go (run via `go test ./...`
+# or `make verify-manifest-parity`, and wired into CI in
+# .github/workflows/build.yml), which renders both with:
 #   diff <(kubectl kustomize config/csi-provider) \
 #        <(helm template sync config/csi-provider/chart --namespace kube-system \
 #            --set fullnameOverride=bitwarden-csi-provider)
+# and fails the build if the security-relevant fields diverge.
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:

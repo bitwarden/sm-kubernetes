@@ -54,6 +54,9 @@ jobs:
           make setup
           make test
 
+      - name: Verify csi-provider manifest parity
+        run: make verify-manifest-parity
+
       - name: Upload to codecov.io
         uses: codecov/codecov-action@5a1091511ad55cbe89839c7260b706298ca349f7 # v5.5.1
 
