@@ -1,0 +1,40 @@
+# This provider's gRPC server (internal/csi) never calls the Kubernetes API.
+# It only ever reads two things the upstream secrets-store-csi-driver hands
+# it directly on the Mount RPC:
+#   - the SecretProviderClass.spec.parameters (organizationId, objects, ...)
+#   - the Secrets Manager access token resolved from nodePublishSecretRef
+# The upstream driver -- not this provider -- resolves nodePublishSecretRef
+# against the core v1 Secret before ever calling us, so this provider needs
+# no get/list/watch (or any other) RBAC verbs on Secrets, SecretProviderClass,
+# or any other Kubernetes object.
+#
+# Only a ServiceAccount is defined below, so the DaemonSet pod has an
+# identity to run under. No Role, ClusterRole, RoleBinding, or
+# ClusterRoleBinding is included because none is needed. Since this
+# ServiceAccount is never used to talk to the API server, its token is not
+# auto-mounted into the pod.
+#
+# If a future version of this provider needs to call the Kubernetes API,
+# grant it the minimum verbs required at that point rather than reusing a
+# broader existing identity.
+#
+# KEPT IN SYNC WITH: chart/templates/serviceaccount.yaml. There is no shared
+# source of truth between this plain manifest and the Helm chart template --
+# if RBAC scope changes here (e.g. a Role/RoleBinding becomes necessary),
+# mirror the same scope in the chart template. This parity (including the
+# set of RBAC object kinds rendered by each) is checked automatically by
+# config/csi-provider/parity/manifest_parity_test.go -- see daemonset.yaml
+# for the underlying diff command that test automates.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: bitwarden-csi-provider
+  namespace: kube-system
+  labels:
+    app.kubernetes.io/name: serviceaccount
+    app.kubernetes.io/instance: bitwarden-csi-provider
+    app.kubernetes.io/component: csi-provider
+    app.kubernetes.io/created-by: sm-operator
+    app.kubernetes.io/part-of: sm-operator
+    app.kubernetes.io/managed-by: kustomize
+automountServiceAccountToken: false

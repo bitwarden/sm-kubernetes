@@ -52,3 +52,7 @@ sm-operator.tar
 **/__debug_bin*
 **/temp.zip
 **/.env
+
+# Helm dependency charts fetched by `helm dependency update/build` (see
+# config/csi-provider/chart/Chart.yaml); Chart.lock is committed instead.
+**/charts/*.tgz

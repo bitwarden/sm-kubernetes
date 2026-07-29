@@ -1,0 +1,8 @@
+resources:
+- rbac.yaml
+- daemonset.yaml
+
+images:
+- name: csi-provider
+  newName: localhost/sm-csi-provider
+  newTag: "1.0.0"

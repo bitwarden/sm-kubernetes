@@ -1,4 +1,4 @@
-package controller
+package sm
 
 import (
 	sdk "github.com/bitwarden/sdk-go/v2"

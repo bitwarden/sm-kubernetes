@@ -1,0 +1,11 @@
+Bitwarden Secrets Manager provider for the secrets-store-csi-driver is installed.
+
+1. Make sure the upstream secrets-store-csi-driver (>= v1.6.0) is installed
+   somewhere in this cluster -- either separately, or by this chart via
+   `--set secrets-store-csi-driver.install=true`. Versions older than v1.6.0
+   do not support RequiresRepublish-based rotation with this provider.
+
+2. Create a SecretProviderClass with spec.provider: bitwarden. See
+   ../secretproviderclass-sample.yaml for the full parameter schema, and
+   ../README.md for how to reference it (and its nodePublishSecretRef token)
+   from a Pod.

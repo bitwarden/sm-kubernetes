@@ -1,0 +1,116 @@
+{{- /*
+KEPT IN SYNC WITH: ../../daemonset.yaml. There is no shared source of truth
+between this chart template and the plain kustomize manifest, so any change
+to a security-relevant field below (securityContext, capabilities,
+resources, tolerations, priorityClassName, volumes/volumeMounts) must be
+mirrored by hand in ../../daemonset.yaml. This is enforced automatically by
+../parity/manifest_parity_test.go (run via `go test ./...` or
+`make verify-manifest-parity`, and wired into CI in
+.github/workflows/build.yml), which renders both with:
+  diff <(kubectl kustomize config/csi-provider) \
+       <(helm template sync config/csi-provider/chart --namespace kube-system \
+           --set fullnameOverride=bitwarden-csi-provider)
+and fails the build if the security-relevant fields diverge.
+*/ -}}
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: {{ include "bitwarden-csi-provider.fullname" . }}
+  labels:
+    {{- include "bitwarden-csi-provider.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "bitwarden-csi-provider.selectorLabels" . | nindent 6 }}
+  updateStrategy:
+    {{- toYaml .Values.updateStrategy | nindent 4 }}
+  template:
+    metadata:
+      labels:
+        {{- include "bitwarden-csi-provider.selectorLabels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      serviceAccountName: {{ include "bitwarden-csi-provider.serviceAccountName" . }}
+      automountServiceAccountToken: false
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if .Values.priorityClassName }}
+      priorityClassName: {{ .Values.priorityClassName }}
+      {{- end }}
+      {{- with .Values.securityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      # kubelet creates the provider-socket hostPath below as root:root 0755
+      # the first time it's needed (DirectoryOrCreate) and never chowns it
+      # for fsGroup, since fsGroup does not apply to hostPath volumes. The
+      # non-root provider container cannot create its Unix socket inside a
+      # directory it can't write to, so this init container -- and only this
+      # init container -- runs as root, purely to chmod that one shared
+      # directory before the long-running provider process starts.
+      initContainers:
+        - name: init-provider-socket-dir
+          image: "{{ .Values.initContainerImage.repository }}:{{ .Values.initContainerImage.tag }}"
+          imagePullPolicy: {{ .Values.initContainerImage.pullPolicy }}
+          command: ["sh", "-c", "chmod 0777 {{ .Values.socketDir }}"]
+          securityContext:
+            runAsNonRoot: false
+            runAsUser: 0
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - "ALL"
+          volumeMounts:
+            - name: provider-socket
+              mountPath: {{ .Values.socketDir }}
+      containers:
+        - name: bitwarden-csi-provider
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - --endpoint={{ .Values.socketDir }}/bitwarden.sock
+            {{- with .Values.extraArgs }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- with .Values.containerSecurityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: provider-socket
+              mountPath: {{ .Values.socketDir }}
+            # The provider keeps a bounded, idle-evicting cache of logged-in
+            # Secrets Manager SDK sessions under a per-session state
+            # directory created at runtime via os.MkdirTemp under the
+            # default temp directory. readOnlyRootFilesystem requires that
+            # temp directory to be a writable mount.
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: provider-socket
+          hostPath:
+            path: {{ .Values.socketDir }}
+            type: DirectoryOrCreate
+        - name: tmp
+          emptyDir: {}

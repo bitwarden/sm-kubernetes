@@ -1,0 +1,33 @@
+apiVersion: v2
+name: bitwarden-csi-provider
+description: >-
+  Bitwarden Secrets Manager provider for the Kubernetes secrets-store-csi-driver.
+  Runs a DaemonSet that implements the provider/v1alpha1.CSIDriverProviderServer
+  gRPC contract, letting Secrets Manager secrets be mounted into pods via
+  SecretProviderClass resources handled by the upstream driver.
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+home: https://github.com/bitwarden/sm-kubernetes
+sources:
+  - https://github.com/bitwarden/sm-kubernetes
+keywords:
+  - bitwarden
+  - secrets-manager
+  - secrets-store-csi-driver
+  - csi
+
+# The upstream secrets-store-csi-driver is an optional dependency, not a hard
+# requirement of this chart: this provider's DaemonSet + ServiceAccount are
+# useless without the driver installed somewhere in the cluster, but that
+# installation does not have to come from this chart (e.g. it may already be
+# installed cluster-wide, managed separately, or installed via this chart's
+# dependency). See README.md: the driver must be >= v1.6.0 for
+# RequiresRepublish-based rotation to work with this provider.
+dependencies:
+  - name: secrets-store-csi-driver
+    version: ">=1.6.0"
+    repository: https://kubernetes-sigs.github.io/secrets-store-csi-driver/charts
+    condition: secrets-store-csi-driver.install
+    tags:
+      - secrets-store-csi-driver
