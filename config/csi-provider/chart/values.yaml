@@ -1,0 +1,92 @@
+# Default values for bitwarden-csi-provider.
+
+image:
+  repository: localhost/sm-csi-provider
+  tag: "1.0.0"
+  pullPolicy: IfNotPresent
+
+# initContainerImage is used only by the init container that chmods the
+# shared provider-socket hostPath directory so the non-root provider
+# container can create its Unix socket inside it (see daemonset.yaml).
+initContainerImage:
+  repository: busybox
+  tag: "1.36"
+  pullPolicy: IfNotPresent
+
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  # create controls whether a ServiceAccount is created for the provider
+  # DaemonSet. This provider never calls the Kubernetes API (see
+  # ../README.md), so no Role/ClusterRole is created regardless of this
+  # setting; the token for this ServiceAccount is never auto-mounted.
+  create: true
+  name: ""
+  annotations: {}
+
+# socketDir is the hostPath, shared with the upstream secrets-store-csi-driver
+# node pods, that this provider's Unix Domain Socket is created under.
+socketDir: /etc/kubernetes/secrets-store-csi-providers
+
+updateStrategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxUnavailable: 1
+
+# priorityClassName defaults to system-node-critical, matching the priority
+# the upstream driver itself runs at, since Mount RPCs to this provider are
+# on the critical path for pod volume mounting on the node. Set to "" to omit
+# entirely (e.g. on clusters where this class is unavailable).
+priorityClassName: system-node-critical
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 128Mi
+  requests:
+    cpu: 10m
+    memory: 64Mi
+
+# tolerations defaults to running on every node, including tainted
+# control-plane nodes, so pods scheduled anywhere in the cluster can reach a
+# local provider socket.
+tolerations:
+  - operator: Exists
+
+nodeSelector: {}
+
+affinity: {}
+
+podAnnotations: {}
+podLabels: {}
+
+securityContext:
+  runAsNonRoot: true
+  seccompProfile:
+    type: RuntimeDefault
+
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - "ALL"
+
+# extraArgs are appended to the provider container's args, after the
+# --endpoint flag derived from socketDir above.
+extraArgs: []
+
+# The upstream secrets-store-csi-driver is an OPTIONAL dependency of this
+# chart (see Chart.yaml). It is disabled by default: most clusters either
+# already have it installed, or want to manage its lifecycle independently
+# of this provider. Set install: true to have this chart also install the
+# upstream driver as a subchart; any other keys under this section are passed
+# straight through as that subchart's values -- see
+# https://github.com/kubernetes-sigs/secrets-store-csi-driver/blob/main/charts/secrets-store-csi-driver/values.yaml
+#
+# Regardless of how it is installed, the driver must be >= v1.6.0 for
+# RequiresRepublish-based secret rotation to work with this provider; see
+# ../README.md.
+secrets-store-csi-driver:
+  install: false

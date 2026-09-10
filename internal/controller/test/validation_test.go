@@ -5,8 +5,8 @@ import (
 
 	sdk "github.com/bitwarden/sdk-go/v2"
 	operatorsv1 "github.com/bitwarden/sm-kubernetes/api/v1"
-	"github.com/bitwarden/sm-kubernetes/internal/controller"
 	"github.com/bitwarden/sm-kubernetes/internal/controller/test/testutils"
+	"github.com/bitwarden/sm-kubernetes/internal/sm"
 	"github.com/google/uuid"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -53,19 +53,19 @@ var _ = Describe("Secret Name Validation Tests", Ordered, func() {
 			}
 
 			for _, name := range validNames {
-				err := controller.ValidateK8sSecretKeyName(name)
+				err := sm.ValidateK8sSecretKeyName(name)
 				Expect(err).NotTo(HaveOccurred(), "Expected '%s' to be valid for K8s", name)
 			}
 		})
 
 		It("should reject empty names", func() {
-			err := controller.ValidateK8sSecretKeyName("")
+			err := sm.ValidateK8sSecretKeyName("")
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("cannot be empty"))
 		})
 
 		It("should reject names with spaces", func() {
-			err := controller.ValidateK8sSecretKeyName("my secret")
+			err := sm.ValidateK8sSecretKeyName("my secret")
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("invalid character"))
 			Expect(err.Error()).To(ContainSubstring("Kubernetes"))
@@ -76,7 +76,7 @@ var _ = Describe("Secret Name Validation Tests", Ordered, func() {
 
 			for _, char := range invalidChars {
 				name := "secret" + char + "name"
-				err := controller.ValidateK8sSecretKeyName(name)
+				err := sm.ValidateK8sSecretKeyName(name)
 				Expect(err).To(HaveOccurred(), "Expected '%s' to be invalid for K8s", name)
 				Expect(err.Error()).To(ContainSubstring("invalid character"))
 			}
@@ -97,32 +97,32 @@ var _ = Describe("Secret Name Validation Tests", Ordered, func() {
 			}
 
 			for _, name := range validNames {
-				err := controller.ValidateSecretKeyName(name)
+				err := sm.ValidateSecretKeyName(name)
 				Expect(err).NotTo(HaveOccurred(), "Expected '%s' to be valid", name)
 			}
 		})
 
 		It("should reject empty names", func() {
-			err := controller.ValidateSecretKeyName("")
+			err := sm.ValidateSecretKeyName("")
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("cannot be empty"))
 		})
 
 		It("should reject names starting with a digit", func() {
-			err := controller.ValidateSecretKeyName("123secret")
+			err := sm.ValidateSecretKeyName("123secret")
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("must start with a letter or underscore"))
 		})
 
 		It("should reject names with hyphens", func() {
-			err := controller.ValidateSecretKeyName("my-secret")
+			err := sm.ValidateSecretKeyName("my-secret")
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("invalid character"))
 			Expect(err.Error()).To(ContainSubstring("-"))
 		})
 
 		It("should reject names with spaces", func() {
-			err := controller.ValidateSecretKeyName("my secret")
+			err := sm.ValidateSecretKeyName("my secret")
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("invalid character"))
 		})
@@ -132,7 +132,7 @@ var _ = Describe("Secret Name Validation Tests", Ordered, func() {
 
 			for _, char := range invalidChars {
 				name := "secret" + char + "name"
-				err := controller.ValidateSecretKeyName(name)
+				err := sm.ValidateSecretKeyName(name)
 				Expect(err).To(HaveOccurred(), "Expected '%s' to be invalid", name)
 				Expect(err.Error()).To(ContainSubstring("invalid character"))
 			}

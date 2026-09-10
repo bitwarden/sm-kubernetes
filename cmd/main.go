@@ -46,6 +46,7 @@ import (
 
 	operatorsv1 "github.com/bitwarden/sm-kubernetes/api/v1"
 	"github.com/bitwarden/sm-kubernetes/internal/controller"
+	"github.com/bitwarden/sm-kubernetes/internal/sm"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -109,7 +110,7 @@ func main() {
 		panic(err)
 	}
 
-	bwClientFactory := controller.NewBitwardenClientFactory(*bwApiUrl, *identApiUrl)
+	bwClientFactory := sm.NewBitwardenClientFactory(*bwApiUrl, *identApiUrl)
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:                 scheme,

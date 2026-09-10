@@ -128,6 +128,10 @@ vet: ## Run go vet against code.
 test: manifests generate fmt vet envtest ## Run tests.
 	GOTOOLCHAIN=$(GO_TOOLCHAIN)+auto CC=musl-gcc KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test -ldflags '-linkmode external -extldflags "-static -lm -Wl,-unresolved-symbols=ignore-all"' ./... -coverprofile cover.out -coverpkg=./...
 
+.PHONY: verify-manifest-parity
+verify-manifest-parity: ## Verify the csi-provider kustomize manifests and Helm chart render an equivalent security posture.
+	go test ./config/csi-provider/parity/...
+
 ##@ Build
 
 .PHONY: build
