@@ -159,23 +159,31 @@ docker-save: ## Save docker image to archive.
 # - have enable BuildKit, More info: https://docs.docker.com/develop/develop-images/build_enhancements/
 # - be able to push the image for your registry (i.e. if you do not inform a valid value via IMG=<myregistry/image:<tag>> then the export will fail)
 # To properly provided solutions that supports more than one platform you should use this option.
+#
+# NOTE: This project builds the manager binary with CGO enabled (it links against the
+# Bitwarden SDK's prebuilt, architecture-specific static libraries via cgo). Because of that,
+# the builder stage of the Dockerfile CANNOT be cross-compiled using the standard
+# `--platform=$BUILDPLATFORM` trick: doing so would run the C compiler/assembler (musl-gcc)
+# for the *build* platform against Go objects targeting a *different* platform (e.g. building
+# on amd64 while targeting arm64), which fails or produces a broken binary and results in
+# `exec format error` at runtime (see https://github.com/bitwarden/sm-kubernetes/issues/131).
+# Instead, each target platform's builder stage must run natively (or under QEMU emulation),
+# so we build directly against the existing Dockerfile without rewriting the FROM lines.
 PLATFORMS ?= linux/arm64,linux/amd64#,linux/s390x,linux/ppc64le
 .PHONY: docker-buildx
 docker-buildx: test ## Build and push docker image for the manager for cross-platform support
-	# copy existing Dockerfile and insert --platform=${BUILDPLATFORM} into Dockerfile.cross, and preserve the original Dockerfile
-	sed -e '1 s/\(^FROM\)/FROM --platform=\$$\{BUILDPLATFORM\}/; t' -e ' 1,// s//FROM --platform=\$$\{BUILDPLATFORM\}/' Dockerfile > Dockerfile.cross
 	- $(CONTAINER_TOOL) buildx create --name project-v3-builder
 	$(CONTAINER_TOOL) buildx use project-v3-builder
-	- $(CONTAINER_TOOL) buildx build --push --platform=$(PLATFORMS) --tag ${IMG} -f Dockerfile.cross .
+	- $(CONTAINER_TOOL) buildx build --push --platform=$(PLATFORMS) --tag ${IMG} -f Dockerfile .
 	- $(CONTAINER_TOOL) buildx rm project-v3-builder
-	rm Dockerfile.cross
 
 .PHONY: podman-buildx
 podman-buildx: test ## Build and push docker image for the manager for cross-platform support
-	# copy existing Dockerfile and insert --platform=${BUILDPLATFORM} into Dockerfile.cross, and preserve the original Dockerfile
-	sed -e '1 s/\(^FROM\)/FROM --platform=\$$\{BUILDPLATFORM\}/; t' -e ' 1,// s//FROM --platform=\$$\{BUILDPLATFORM\}/' Dockerfile > Dockerfile.cross
-	- $(CONTAINER_TOOL) build --platform=$(PLATFORMS) --tag ${IMG} -f Dockerfile.cross .
-	rm Dockerfile.cross
+	- $(CONTAINER_TOOL) build --platform=$(PLATFORMS) --tag ${IMG} -f Dockerfile .
+
+.PHONY: test-multiarch
+test-multiarch: ## Build and run the manager image for each platform in PLATFORMS to verify it executes (regression test for issue #131).
+	PLATFORMS="$(PLATFORMS)" CONTAINER_TOOL="$(CONTAINER_TOOL)" ./hack/test-multiarch.sh
 
 ##@ Deployment
 
