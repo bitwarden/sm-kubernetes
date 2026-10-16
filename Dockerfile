@@ -21,7 +21,7 @@ RUN mkdir state
 
 RUN CC=musl-gcc CGO_ENABLED=1 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -a -ldflags '-linkmode external -extldflags "-static -Wl,-unresolved-symbols=ignore-all"' -o manager cmd/main.go
 
-FROM gcr.io/distroless/base-debian12:nonroot
+FROM gcr.io/distroless/base-debian13:nonroot
 WORKDIR /
 COPY --from=builder /workspace/manager .
 COPY --from=builder --chown=65532:65532 /workspace/state/ ./state/
