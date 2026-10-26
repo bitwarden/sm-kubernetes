@@ -7,9 +7,6 @@
 # Default owners
 * @bitwarden/team-secrets-manager-dev
 
-# Workflows ownership
-.github/workflows/release.yml @bitwarden/dept-bre
-
 ## Docker-related files
 **/Dockerfile @bitwarden/dept-bre @bitwarden/team-appsec
 **/.dockerignore @bitwarden/dept-bre @bitwarden/team-appsec
