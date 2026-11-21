@@ -12,3 +12,6 @@
 **/.dockerignore @bitwarden/dept-bre @bitwarden/team-appsec
 **/entrypoint.sh @bitwarden/dept-bre @bitwarden/team-appsec
 **/docker-compose.yml @bitwarden/dept-bre @bitwarden/team-appsec
+
+# Claude related files
+.claude/ @bitwarden/team-ai-sme @bitwarden/tech-leads
